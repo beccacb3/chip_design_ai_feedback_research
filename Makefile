@@ -23,7 +23,7 @@ run:                ## Run an experiment into a new folder in runs/
 	$(DOCKER) python3 -m framework.control_loop $(CONFIG)
 
 eval:               ## Score a saved run against designs/.../golden/
-	$(DOCKER) python3 -m evaluation.evaluate_run $(RUN)
+	$(DOCKER) python3 -m evaluation.final $(RUN)
 
 report:             ## Build a comparison table across runs/
 	$(DOCKER) python3 -m evaluation.report runs/

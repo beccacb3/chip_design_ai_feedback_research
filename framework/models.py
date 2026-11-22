@@ -91,9 +91,9 @@ class CheckResult:
 
 @dataclass
 class Iteration:
-    """One pass of generate (index 0) or fix (index 1..k)."""
+    """One pass of generate (index 0) or fix (index 1..k), saved in iterations/iter_<k>/."""
     index: int
-    testbench_path: str            # e.g. "generated_tb/iter_0.sv"
+    testbench_path: str            # e.g. "iterations/iter_0/testbench.sv"
     llm_calls: list[LLMCall]
     checks: list[CheckResult]
     passed: bool
@@ -105,7 +105,7 @@ class DesignRun:
     design: str
     seed: int
     iterations: list[Iteration]
-    final_testbench: str           # "generated_tb/final.sv"
+    final_testbench: str           # "final/testbench.sv"
     final_passed: bool
     total_tokens: int
     total_cost_usd: float
@@ -114,7 +114,7 @@ class DesignRun:
 
 @dataclass
 class EvalResult:
-    """Saved as runs/.../<design>__seed<n>/eval.json (scored against golden/)."""
+    """Saved as runs/.../<design>__seed<n>/final/eval.json (scored against golden/)."""
     design: str
     seed: int
     compiles: bool                 # Eval0: compiles with golden/rtl/
