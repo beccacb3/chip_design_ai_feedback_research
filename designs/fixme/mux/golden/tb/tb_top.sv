@@ -75,6 +75,7 @@ module tb_top;
             $display("\n*** ALL TESTS PASSED ***");
         end else begin
             $display("\n*** SOME TESTS FAILED ***");
+            $fatal(1, "SOME TESTS FAILED");
         end
         $display("============================================================");
         

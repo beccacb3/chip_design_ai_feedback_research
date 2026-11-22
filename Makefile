@@ -2,15 +2,15 @@ IMAGE  = spec-fidelity
 CONFIG ?= configs/experiments/baseline.yaml
 
 # Run a command inside the Docker container with the repo mounted.
-DOCKER = docker run --rm -v $(PWD):/work -w /work -e OPENROUTER_API_KEY $(IMAGE)
+DOCKER = docker run --rm -v $(CURDIR):/work -w /work -e PYTHONPATH=/work -e PYTHONDONTWRITEBYTECODE=1 -e OPENROUTER_API_KEY $(IMAGE)
 
-.PHONY: image shell check show-config run eval report
+.PHONY: image shell check show-config test run eval report
 
 image:              ## Build the Docker image (Python + iverilog + verilator)
 	docker build -t $(IMAGE) .
 
 shell:              ## Open a bash shell inside the container
-	docker run --rm -it -v $(PWD):/work -w /work -e OPENROUTER_API_KEY $(IMAGE) bash
+	docker run --rm -it -v $(CURDIR):/work -w /work -e PYTHONPATH=/work -e OPENROUTER_API_KEY $(IMAGE) bash
 
 check:              ## Check design folders and experiment configs
 	python3 designs/standardize.py check
@@ -18,6 +18,9 @@ check:              ## Check design folders and experiment configs
 
 show-config:        ## Print the resolved ExperimentConfig for CONFIG
 	python3 -m framework.config $(CONFIG)
+
+test:               ## Run simulation and benchmark validation tests in Docker
+	$(DOCKER) python3 test_simulation.py
 
 run:                ## Run an experiment into a new folder in runs/
 	$(DOCKER) python3 -m framework.control_loop $(CONFIG)

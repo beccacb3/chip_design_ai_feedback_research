@@ -1,4 +1,6 @@
 name: fixme
 paths:
+  - designs/fixme/alu_select
+  - designs/fixme/dffr_async
   - designs/fixme/mux
   - designs/fixme/syncrstz
