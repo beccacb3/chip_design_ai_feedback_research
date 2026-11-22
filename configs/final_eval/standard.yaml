@@ -1,7 +1,12 @@
 name: standard
 metrics:
-  - compile_pass
-  - golden_rtl_pass
-  - mutation_kill_rate
+  # Testbench outcome checks (reused from evaluation/testbench.py):
+  - compile
+  - simulate
   - coverage
+  - mutations
+  # Final-only trajectory & audit evaluations (from evaluation/final.py):
+  - false_positive
+  - turns
   - cost_and_time
+  - assertion_audit

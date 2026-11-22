@@ -22,13 +22,14 @@ show-config:        ## Print the resolved ExperimentConfig for CONFIG
 test:               ## Run infrastructure unit/integration tests in Docker
 	$(DOCKER) python3 tests/test_simulation.py
 	$(DOCKER) python3 tests/test_testing_and_feedback.py
+	$(DOCKER) python3 tests/test_control_loop_and_final.py
 	$(DOCKER) python3 tests/test_llm.py
 
 run:                ## Run an experiment into a new folder in runs/
 	$(DOCKER) python3 -m framework.control_loop $(CONFIG)
 
-eval:               ## Score a saved run against designs/.../golden/
-	$(DOCKER) python3 -m evaluation.final $(RUN)
+eval:               ## Re-run the final evaluation stage on a saved run folder
+	$(DOCKER) python3 -m framework.control_loop --eval-only $(RUN)
 
 report:             ## Build a comparison table across runs/
 	$(DOCKER) python3 -m evaluation.report runs/

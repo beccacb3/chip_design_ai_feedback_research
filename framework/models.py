@@ -149,13 +149,21 @@ class DesignRun:
 
 @dataclass
 class EvalResult:
-    """Saved as runs/.../<design>__seed<n>/final/eval.json (scored against golden/)."""
+    """Saved as runs/.../<design>__seed<n>/final/eval.json (composed final scorecard)."""
     design: str
     seed: int
-    compiles: bool                 # Eval0: compiles with golden/rtl/
-    golden_rtl_passed: bool        # Eval1: accepts known-good golden/rtl/ (False = false positive)
-    mutants_total: int
+    compiles: bool                 # from testbench.check_compile
+    golden_rtl_passed: bool        # from testbench.check_simulate
+    false_positive: bool           # from final.eval_false_positive
+    coverage_score: float          # from testbench.check_coverage
+    mutants_total: int             # from testbench.check_mutations
     mutants_killed: int
-    mutation_score: float          # mutants_killed / mutants_total (Eval2)
+    mutation_score: float
+    turns: int                     # from final.eval_turns
+    total_tokens: int              # from final.eval_cost_and_time
+    total_cost_usd: float
+    total_wall_time_s: float
+    assertion_audit_passed: bool   # from final.eval_assertion_audit
     killed_list: list[str] = field(default_factory=list)
     survived_list: list[str] = field(default_factory=list)
+    checks: list[CheckResult] = field(default_factory=list)
