@@ -1,0 +1,4 @@
+name: verilator
+tool: verilator
+args: ["--coverage"]
+timeout_s: 10

@@ -1,9 +1,9 @@
-"""Dispatcher: reads ExperimentConfig.feedback, calls evaluation.testbench checks,
+"""Dispatcher: reads ExperimentConfig.testing, calls evaluation.testbench checks,
 and saves iteration check artifacts in iterations/iter_<k>/."""
 
 from pathlib import Path
 from evaluation import testbench
-from framework.models import CheckResult, Design, FeedbackConfig
+from framework.models import CheckResult, Design, SimulationConfig, TestingConfig
 
 CHECKS = {
     "compile": testbench.check_compile,
@@ -18,12 +18,13 @@ def run_iteration_checks(
     design: Design,
     tb_path: Path,
     iter_dir: Path,
-    feedback_configs: list[FeedbackConfig],
+    sim: SimulationConfig,
+    testing_configs: list[TestingConfig],
 ) -> list[CheckResult]:
-    """Dispatch each configured feedback check to evaluation.testbench."""
+    """Dispatch each configured test in `testing` to evaluation.testbench."""
     results = []
-    for fb in feedback_configs:
-        if fb.name not in CHECKS:
-            raise ValueError(f"unknown feedback check: {fb.name}")
-        results.append(CHECKS[fb.name](design, tb_path, iter_dir, fb))
+    for cfg in testing_configs:
+        if cfg.name not in CHECKS:
+            raise ValueError(f"unknown testing check: {cfg.name}")
+        results.append(CHECKS[cfg.name](design, tb_path, iter_dir, sim, cfg))
     return results

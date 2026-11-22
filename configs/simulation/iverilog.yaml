@@ -1,0 +1,4 @@
+name: iverilog
+tool: iverilog
+args: ["-g2012"]
+timeout_s: 10

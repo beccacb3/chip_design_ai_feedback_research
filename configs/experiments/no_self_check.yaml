@@ -1,6 +1,5 @@
-# Same as baseline, but without the self-check feedback.
+# Ablation: same as baseline, but only run the compile check during iterations.
 extends: configs/experiments/baseline.yaml
 name: no_self_check
-
-feedback:
-  - configs/feedback/compile.yaml
+testing:
+  - configs/testing/compile.yaml

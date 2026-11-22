@@ -1,10 +1,10 @@
-"""Load experiment configs into dataclasses defined in framework/models.py.
+"""Load experiment and component configs into dataclasses defined in framework/models.py.
 
-An experiment is a YAML file in configs/experiments/. It can:
-
-  1. Point to other files by path (model, feedback, prompts, designs).
-  2. Use `extends:` to start from another experiment. Any key written in the
+Two simple rules apply to every YAML file in configs/:
+  1. Top-level `extends:` starts from another YAML file; any key written in the
      child file replaces that key from the parent.
+  2. An experiment file references its 6 sections by path:
+     model, designs, simulation, testing (list), feedback, final_eval.
 
 Usage (validate and print resolved config):
     python3 -m framework.config configs/experiments/baseline.yaml
@@ -16,60 +16,90 @@ import sys
 
 import yaml
 
-from framework.models import ExperimentConfig, FeedbackConfig, ModelConfig
+from framework.models import (
+    DesignsConfig,
+    ExperimentConfig,
+    FeedbackConfig,
+    FinalEvalConfig,
+    ModelConfig,
+    SimulationConfig,
+    TestingConfig,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-REQUIRED_KEYS = ["name", "designs", "model", "prompts", "feedback", "max_iterations", "seeds"]
+REQUIRED_KEYS = [
+    "name",
+    "max_iterations",
+    "seeds",
+    "model",
+    "designs",
+    "simulation",
+    "testing",
+    "feedback",
+    "final_eval",
+]
 
 
-def read_yaml(path):
-    """Read a YAML file given a path relative to the repo root."""
-    with open(REPO_ROOT / path) as f:
-        return yaml.safe_load(f)
+def load_yaml(path: str) -> dict:
+    """Read a YAML file relative to REPO_ROOT, applying top-level `extends:` if present."""
+    data = yaml.safe_load((REPO_ROOT / path).read_text())
+    if "extends" in data:
+        parent = load_yaml(data.pop("extends"))
+        parent.update(data)  # child keys replace parent keys
+        data = parent
+    return data
 
 
-def load_raw_experiment(path):
-    """Read an experiment YAML dictionary, applying `extends:` if present."""
-    config = read_yaml(path)
-    if "extends" in config:
-        parent = load_raw_experiment(config.pop("extends"))
-        parent.update(config)  # child keys replace parent keys
-        config = parent
-    return config
-
-
-def find_problems(raw):
-    """Return a list of problems: missing keys, or paths that don't exist."""
+def find_problems(raw: dict) -> list[str]:
+    """Return a list of missing keys or referenced files/folders that don't exist."""
     problems = [f"missing key: {key}" for key in REQUIRED_KEYS if key not in raw]
     if problems:
         return problems
 
-    paths = [raw["designs"], raw["model"], *raw["feedback"], *raw["prompts"].values()]
-    for path in paths:
+    yaml_refs = [
+        raw["model"],
+        raw["designs"],
+        raw["simulation"],
+        *raw["testing"],
+        raw["feedback"],
+        raw["final_eval"],
+    ]
+    for path in yaml_refs:
         if not (REPO_ROOT / path).exists():
             problems.append(f"file not found: {path}")
+    if problems:
+        return problems
+
+    fb = load_yaml(raw["feedback"])
+    for key in ("generate_prompt", "root_cause_prompt", "fix_prompt"):
+        if fb.get(key) and not (REPO_ROOT / fb[key]).exists():
+            problems.append(f"prompt not found: {fb[key]}")
+
+    for d_path in load_yaml(raw["designs"]).get("paths", []):
+        if not (REPO_ROOT / d_path).exists():
+            problems.append(f"design path not found: {d_path}")
+
     return problems
 
 
-def load_experiment(path) -> ExperimentConfig:
-    """Load an experiment file and resolve its model and feedback into dataclasses."""
-    raw = load_raw_experiment(path)
+def load_experiment(path: str) -> ExperimentConfig:
+    """Load an experiment file and all 6 referenced config sections into dataclasses."""
+    raw = load_yaml(path)
     problems = find_problems(raw)
     if problems:
         raise ValueError("; ".join(problems))
 
-    model = ModelConfig(**read_yaml(raw["model"]))
-    feedback = [FeedbackConfig(**read_yaml(fb_path)) for fb_path in raw["feedback"]]
-
     return ExperimentConfig(
         name=raw["name"],
-        designs=raw["designs"],
-        model=model,
-        prompts=raw["prompts"],
-        feedback=feedback,
         max_iterations=raw["max_iterations"],
         seeds=raw["seeds"],
+        model=ModelConfig(**load_yaml(raw["model"])),
+        designs=DesignsConfig(**load_yaml(raw["designs"])),
+        simulation=SimulationConfig(**load_yaml(raw["simulation"])),
+        testing=[TestingConfig(**load_yaml(p)) for p in raw["testing"]],
+        feedback=FeedbackConfig(**load_yaml(raw["feedback"])),
+        final_eval=FinalEvalConfig(**load_yaml(raw["final_eval"])),
     )
 
 
@@ -78,7 +108,7 @@ def main():
         print(__doc__)
         return 2
 
-    raw = load_raw_experiment(sys.argv[1])
+    raw = load_yaml(sys.argv[1])
     problems = find_problems(raw)
     if problems:
         for problem in problems:

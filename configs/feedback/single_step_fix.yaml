@@ -1,0 +1,4 @@
+# Single-call repair: skip the separate root-cause call and go straight to fix.
+extends: configs/feedback/root_cause_then_fix.yaml
+name: single_step_fix
+root_cause_prompt: null

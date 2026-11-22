@@ -1,4 +1,4 @@
-"""Data models (contracts) shared across the framework.
+"""Data models (contracts) shared across framework/ and evaluation/.
 
 Every YAML/JSON file on disk and every boundary between modules corresponds to
 one of these dataclasses. Use `dataclasses.asdict(obj)` to serialize to dict.
@@ -12,32 +12,66 @@ from dataclasses import dataclass, field
 
 @dataclass
 class ModelConfig:
-    """configs/models/*.yaml -- OpenRouter model settings."""
+    """configs/models/*.yaml -> framework/llm.py."""
     name: str
-    model_id: str                  # e.g. "openai/gpt-4o-2024-08-06"
+    model_id: str                  # OpenRouter id, e.g. "openai/gpt-4o-2024-08-06"
     temperature: float = 0.2
     max_tokens: int = 8192
 
 
 @dataclass
-class FeedbackConfig:
-    """configs/feedback/*.yaml -- one in-loop check the agent can run."""
-    name: str                      # "compile", "simulate", "self_check", "coverage", "spec_check"
-    tool: str                      # "iverilog", "verilator", "llm"
+class DesignsConfig:
+    """configs/designs/*.yaml -> designs/standardize.py."""
+    name: str
+    paths: list[str]               # design folders or globs (e.g. "designs/examples/counter4")
+
+
+@dataclass
+class SimulationConfig:
+    """configs/simulation/*.yaml -> evaluation/simulation.py."""
+    name: str
+    tool: str                      # "iverilog", "verilator"
     args: list[str] = field(default_factory=list)
+    timeout_s: int = 10
+
+
+@dataclass
+class TestingConfig:
+    """configs/testing/*.yaml -> framework/testing.py -> evaluation/testbench.py."""
+    name: str                      # "compile", "simulate", "self_check", "coverage", "spec_check"
     options: dict = field(default_factory=dict)
 
 
 @dataclass
-class ExperimentConfig:
-    """configs/experiments/*.yaml (after resolving `extends:` and file paths)."""
+class FeedbackConfig:
+    """configs/feedback/*.yaml -> framework/feedback.py."""
     name: str
-    designs: str                   # path to designs/<group>
-    model: ModelConfig
-    prompts: dict[str, str]        # {"generate": "prompts/...", "find_root_cause": ..., "fix": ...}
-    feedback: list[FeedbackConfig]
+    generate_prompt: str           # "prompts/generate_testbench.md"
+    fix_prompt: str                # "prompts/fix_testbench.md"
+    root_cause_prompt: str | None = None
+    history: str = "full"          # "full" or "last_only"
+    max_error_lines: int = 100
+
+
+@dataclass
+class FinalEvalConfig:
+    """configs/final_eval/*.yaml -> evaluation/final.py & evaluation/report.py."""
+    name: str
+    metrics: list[str]
+
+
+@dataclass
+class ExperimentConfig:
+    """configs/experiments/*.yaml (after resolving `extends:` and all 6 sections)."""
+    name: str
     max_iterations: int
     seeds: list[int]
+    model: ModelConfig
+    designs: DesignsConfig
+    simulation: SimulationConfig
+    testing: list[TestingConfig]
+    feedback: FeedbackConfig
+    final_eval: FinalEvalConfig
 
 
 # --------------------------------------------------------------------- designs
@@ -82,10 +116,10 @@ class LLMCall:
 
 @dataclass
 class CheckResult:
-    """Result of running one feedback check during the agent loop."""
+    """Result of running one in-loop check from `testing`."""
     name: str
     passed: bool
-    summary: str                   # fed back to the LLM if passed is False
+    summary: str                   # self-contained text joined by feedback.py when passed is False
     details: dict = field(default_factory=dict)
 
 

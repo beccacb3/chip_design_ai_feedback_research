@@ -1,6 +1,4 @@
 # Run the compiled testbench and check that simulation finishes before timeout.
 name: simulate
-tool: vvp
-args: []
 options:
   timeout_s: 10

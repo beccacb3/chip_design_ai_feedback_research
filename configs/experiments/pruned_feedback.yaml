@@ -1,0 +1,4 @@
+# Ablation: same as baseline, but use pruned conversation history in feedback.
+extends: configs/experiments/baseline.yaml
+name: pruned_feedback
+feedback: configs/feedback/pruned_history.yaml

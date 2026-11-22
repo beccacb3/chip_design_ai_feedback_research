@@ -1,0 +1,7 @@
+name: standard
+metrics:
+  - compile_pass
+  - golden_rtl_pass
+  - mutation_kill_rate
+  - coverage
+  - cost_and_time

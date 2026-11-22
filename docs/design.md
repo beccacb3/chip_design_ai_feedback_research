@@ -5,9 +5,10 @@ The framework has three goals:
 1. **Everything is captured as code/config:** the simulator environment (`Dockerfile`),
    workflow commands (`Makefile`), experiment settings (`configs/`), and data contracts
    (`framework/models.py`).
-2. **Change one variable at a time:** each experiment is a short YAML file that points
-   to reusable model, prompt, and feedback files, or `extends:` another experiment and
-   replaces only the key being tested.
+2. **Mix-and-match configs with one inheritance rule:** each of the 6 parts of an
+   experiment (`model`, `designs`, `simulation`, `testing`, `feedback`, `final_eval`)
+   is a small YAML file in `configs/`, and any YAML file can use top-level `extends:`
+   to inherit from another file and override specific keys.
 3. **Clear separation between orchestration and evaluation:** `framework/` runs the agent
    loop and dispatches configured checks; `evaluation/` holds the simulator runner,
    reusable testbench checks, and final grading against `designs/.../golden/`.
@@ -20,9 +21,13 @@ Makefile                named commands: image, shell, check, show-config, run, e
 requirements.txt        pyyaml
 
 configs/
-  experiments/          one file per experiment (input to `make run`)
+  experiments/          top-level experiment files (input to `make run`)
   models/               OpenRouter model id, temperature, max_tokens
-  feedback/             in-loop checks (compile, simulate, self_check, coverage, spec_check)
+  designs/              which design folders to include in a run
+  simulation/           simulator tool (iverilog / verilator), args, timeout
+  testing/              in-loop checks (compile, simulate, self_check, coverage, spec_check)
+  feedback/             repair prompt paths, history strategy (full vs last_only)
+  final_eval/           held-out metrics to compute on final/testbench.sv
 
 prompts/                plain .md files with {placeholders}
 
@@ -41,7 +46,7 @@ framework/              agent loop & config-driven orchestration
   config.py             loads YAML into ExperimentConfig (`python3 -m framework.config`)
   control_loop.py       outer loop: generate -> testing -> feedback -> fix (`make run`)
   llm.py                OpenRouter API call logic -> LLMCall
-  testing.py            dispatcher: reads config.feedback, calls evaluation.testbench
+  testing.py            dispatcher: reads config.testing, calls evaluation.testbench
   feedback.py           formats failed CheckResults into feedback.md
 
 evaluation/             simulation, reusable checks, and final grading
@@ -71,17 +76,18 @@ runs/                   (gitignored) one folder per run, never overwritten
         eval.json       EvalResult (Eval0 compile, Eval1 golden pass, Eval2 mutants)
 ```
 
-## Contracts (`framework/models.py`)
+## How the 6 config sections map to code (`framework/models.py`)
 
-Every YAML/JSON file on disk and every boundary between modules matches a
-standard-library `@dataclass` in `framework/models.py`:
+| Experiment YAML key | Config folder | Dataclass in `models.py` | Module that uses it |
+| --- | --- | --- | --- |
+| `model` | `configs/models/` | `ModelConfig` | `framework/llm.py` |
+| `designs` | `configs/designs/` | `DesignsConfig` | `designs/standardize.py` (`load_design`) |
+| `simulation` | `configs/simulation/` | `SimulationConfig` | `evaluation/simulation.py` |
+| `testing` | `configs/testing/` | `list[TestingConfig]` | `framework/testing.py` → `evaluation/testbench.py` |
+| `feedback` | `configs/feedback/` | `FeedbackConfig` | `framework/feedback.py` |
+| `final_eval` | `configs/final_eval/` | `FinalEvalConfig` | `evaluation/final.py` & `evaluation/report.py` |
 
-- **`ModelConfig`** (`configs/models/*.yaml`): `name`, `model_id` (OpenRouter id), `temperature`, `max_tokens`.
-- **`FeedbackConfig`** (`configs/feedback/*.yaml`): `name`, `tool`, `args`, `options`.
-- **`ExperimentConfig`** (`configs/experiments/*.yaml`): `name`, `designs`, `model`, `prompts`, `feedback`, `max_iterations`, `seeds`.
-- **`Design`** (`designs/<group>/<name>/`): `name`, `top_module`, `original_name`, `spec_path`, `golden_rtl`, `golden_tb`, `golden_mutants`.
-- **`LLMCall`**: exact prompt, raw response, token counts, cost (USD), and wall time.
-- **`CheckResult`**: result of one feedback check (`name`, `passed`, `summary`, `details`).
-- **`Iteration`** & **`DesignRun`** (`run.json`): every iteration's testbench, LLM calls, check results, and total cost/time.
-- **`EvalResult`** (`final/eval.json`): post-run grading against `golden/` (`compiles`, `golden_rtl_passed`, `mutants_killed`, `mutation_score`, `killed_list`, `survived_list`).
-- **`Provenance`** (`provenance.json`): `timestamp`, `git_commit`, `git_dirty`, `docker_image`, `iverilog_version`.
+Why `testing` and `feedback` never get out of sync: every check in
+`evaluation/testbench.py` returns a `CheckResult(name, passed, summary)` with
+its own self-contained error summary. `framework/feedback.py` simply joins the
+`summary` of each failed `CheckResult` and injects it into the repair prompt.

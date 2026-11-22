@@ -1,4 +1,2 @@
 # Check that the generated testbench compiles with the DUT.
 name: compile
-tool: iverilog
-args: ["-g2012"]
