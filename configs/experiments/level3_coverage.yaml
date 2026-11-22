@@ -1,7 +1,6 @@
-# Level 3: iterative feedback from compilation + simulation + RTL statement coverage.
-extends: configs/experiments/baseline.yaml
+# Level 3: extends Level 2 (+ RTL statement/branch coverage feedback).
+extends: configs/experiments/level2_simulate.yaml
 name: level3_coverage
-max_iterations: 5
 testing:
   - configs/testing/compile.yaml
   - configs/testing/simulate.yaml

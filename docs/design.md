@@ -90,7 +90,7 @@ runs/                   (gitignored) one folder per run, never overwritten
 | `level1_compile.yaml` | 5 | `[compile]` | Level 1: compiler error feedback only |
 | `level2_simulate.yaml` | 5 | `[compile, simulate]` | Level 2: compilation + simulation pass on reference RTL |
 | `level3_coverage.yaml` | 5 | `[compile, simulate, coverage]` | Level 3: adds RTL statement/branch coverage feedback |
-| `level4_mutations.yaml` | 5 | `[compile, simulate, mutations]` | Level 4: adds mutation kill-rate feedback |
+| `level4_mutations.yaml` | 5 | `[compile, simulate, coverage, mutations]` | Level 4: adds mutation kill-rate feedback |
 
 Every experiment runs the exact same composed `final_eval` stage at the end
 (`compile`, `simulate`, `coverage`, `mutations`, `false_positive`, `turns`,

@@ -1,7 +1,6 @@
-# Level 2: iterative feedback from compilation + simulation against the reference RTL.
-extends: configs/experiments/baseline.yaml
+# Level 2: extends Level 1 (+ simulation against the reference RTL).
+extends: configs/experiments/level1_compile.yaml
 name: level2_simulate
-max_iterations: 5
 testing:
   - configs/testing/compile.yaml
   - configs/testing/simulate.yaml
