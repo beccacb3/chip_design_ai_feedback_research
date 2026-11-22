@@ -1,4 +1,4 @@
-# Compile the testbench with the design and report any errors.
+# Check that the generated testbench compiles with the DUT.
 name: compile
 tool: iverilog
 args: ["-g2012"]

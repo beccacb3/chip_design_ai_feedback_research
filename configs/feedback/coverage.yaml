@@ -1,4 +1,7 @@
-# Measure which lines/branches of the design the testbench exercises.
+# Spec2Cov-style check: measure code coverage and report uncovered lines/branches.
 name: coverage
 tool: verilator
 args: ["--coverage"]
+options:
+  metrics: [line, branch]
+  min_coverage: 0.90

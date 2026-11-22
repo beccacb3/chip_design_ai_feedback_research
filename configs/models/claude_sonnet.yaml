@@ -1,3 +1,4 @@
-provider: anthropic
-model_id: claude-3-5-sonnet-20240620
+name: claude_sonnet
+model_id: anthropic/claude-3.5-sonnet
 temperature: 0.2
+max_tokens: 8192

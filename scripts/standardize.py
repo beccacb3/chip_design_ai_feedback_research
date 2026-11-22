@@ -1,12 +1,14 @@
-"""Put designs into one standard layout, and check that they follow it.
+"""Put designs into the standard layout, and check that they follow it.
 
 Every design lives in its own folder:
 
     designs/<group>/<name>/
-        design.yaml     name, top_module, original_name
-        spec.md         the natural-language specification
-        rtl/            the design's Verilog files
-        tb/             (optional) a reference testbench
+        design.yaml         name, top_module, original_name
+        spec.md             the natural-language specification (given to agent)
+        golden/             reference answer key (held back for evaluation)
+            rtl/            reference Verilog files (known-good DUT)
+            tb/             (optional) reference testbench
+            mutants/        (optional) buggy RTL files for mutation testing
 
 Usage:
     python scripts/standardize.py check
@@ -23,6 +25,9 @@ from pathlib import Path
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+from framework.models import Design  # noqa: E402
+
 DESIGNS = REPO_ROOT / "designs"
 
 # VerilogEval file names look like: Prob042_vector2_prompt.txt
@@ -38,6 +43,22 @@ def clean_name(name):
 def module_names(verilog_file):
     """Return the names of the modules defined in a Verilog file."""
     return re.findall(r"^\s*module\s+(\w+)", verilog_file.read_text(), re.MULTILINE)
+
+
+def load_design(folder: Path) -> Design:
+    """Load a design folder into the Design dataclass."""
+    folder = folder.resolve()
+    info = yaml.safe_load((folder / "design.yaml").read_text())
+    rel = lambda p: str(p.relative_to(REPO_ROOT))
+    return Design(
+        name=info["name"],
+        top_module=info["top_module"],
+        original_name=info.get("original_name", info["name"]),
+        spec_path=rel(folder / "spec.md"),
+        golden_rtl=[rel(p) for p in sorted((folder / "golden" / "rtl").glob("*.*v"))],
+        golden_tb=[rel(p) for p in sorted((folder / "golden" / "tb").glob("*.*v"))],
+        golden_mutants=[rel(p) for p in sorted((folder / "golden" / "mutants").glob("*.*v"))],
+    )
 
 
 # --------------------------------------------------------------------- check
@@ -56,9 +77,9 @@ def check_design(folder):
     elif not spec.read_text().strip():
         problems.append("spec.md is empty")
 
-    rtl_files = sorted((folder / "rtl").glob("*.*v"))
+    rtl_files = sorted((folder / "golden" / "rtl").glob("*.*v"))
     if not rtl_files:
-        problems.append("no .v or .sv files in rtl/")
+        problems.append("no .v or .sv files in golden/rtl/")
 
     info_file = folder / "design.yaml"
     if not info_file.exists():
@@ -71,7 +92,14 @@ def check_design(folder):
 
     modules = [m for f in rtl_files for m in module_names(f)]
     if rtl_files and info.get("top_module") not in modules:
-        problems.append(f"top_module '{info.get('top_module')}' not found in rtl/ (found {modules})")
+        problems.append(f"top_module '{info.get('top_module')}' not found in golden/rtl/ (found {modules})")
+
+    for mutant in sorted((folder / "golden" / "mutants").glob("*.*v")):
+        if info.get("top_module") not in module_names(mutant):
+            problems.append(f"mutant {mutant.name} does not define top_module '{info.get('top_module')}'")
+
+    if not problems:
+        load_design(folder)  # verify it cleanly populates the Design contract
 
     return problems
 
@@ -113,12 +141,12 @@ def import_verilogeval(source, group, apply):
         if not apply:
             continue
 
-        (target / "rtl").mkdir(parents=True)
+        (target / "golden" / "rtl").mkdir(parents=True)
         shutil.copy(files["prompt"], target / "spec.md")
-        shutil.copy(files["ref"], target / "rtl" / f"{name}.sv")
+        shutil.copy(files["ref"], target / "golden" / "rtl" / f"{name}.sv")
         if "test" in files:
-            (target / "tb").mkdir()
-            shutil.copy(files["test"], target / "tb" / f"{name}_tb.sv")
+            (target / "golden" / "tb").mkdir(parents=True)
+            shutil.copy(files["test"], target / "golden" / "tb" / f"{name}_tb.sv")
 
         # VerilogEval names its reference module "RefModule"; we record
         # whatever name is really in the file.

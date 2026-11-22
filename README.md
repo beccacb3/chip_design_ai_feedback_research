@@ -1,23 +1,26 @@
 # chip_design_ai_feedback_research
 
-A small framework for running and comparing experiments on agent-generated
-hardware testbenches. It accompanies the CSCE689 State-of-the-Art Critique Report.
+A config-driven framework for evaluating how faithfully agent-generated hardware
+testbenches follow their specifications. Accompanies the CSCE689 State-of-the-Art
+Critique Report.
 
-See [`docs/design.md`](docs/design.md) for how it is organized.
+See [`docs/design.md`](docs/design.md) for the architecture and data contracts
+([`framework/models.py`](framework/models.py)).
 
-## Usage
+## Quick start
 
 ```bash
 pip install -r requirements.txt
 
-# Show an experiment's final config (after `extends:`) and any problems
-python scripts/show_config.py configs/experiments/no_self_check.yaml
+# Check all designs under designs/ and validate the experiment config
+make check
 
-# Check that every design follows the standard layout
-python scripts/standardize.py check
+# Print the resolved ExperimentConfig (after `extends:` and file references)
+make show-config CONFIG=configs/experiments/no_self_check.yaml
 
-# Copy VerilogEval files into the standard layout (add --apply to write)
-python scripts/standardize.py import-verilogeval raw/verilogeval verilogeval
+# Preview importing VerilogEval files into designs/verilogeval/<name>/golden/...
+python3 scripts/standardize.py import-verilogeval raw/verilogeval verilogeval
+
+# Build the Docker environment (Python + iverilog + verilator)
+make image
 ```
-
-The runner is not built yet.

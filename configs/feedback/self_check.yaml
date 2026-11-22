@@ -1,8 +1,8 @@
-# CorrectBench-style check: run the testbench against several LLM-written
-# versions of the design. If most of them fail a scenario, the scenario
-# itself is probably wrong.
+# CorrectBench-style check: run the testbench against N LLM-generated candidate
+# RTL implementations; flag scenarios that >fail_threshold of candidates fail.
 name: self_check
 tool: iverilog
 args: ["-g2012"]
-num_designs: 20
-fail_threshold: 0.7
+options:
+  num_designs: 20
+  fail_threshold: 0.7

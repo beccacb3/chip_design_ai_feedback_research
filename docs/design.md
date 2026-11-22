@@ -1,82 +1,82 @@
 # Framework Design
 
-The framework has two jobs:
+The framework has three goals:
 
-1. Describe each experiment in one config file, so that a run can be repeated
-   and two runs can be compared by looking at what differs between their files.
-2. Keep every design (spec + RTL) in the same folder layout, so the code that
-   runs experiments only needs to handle one layout.
+1. **Everything is captured as code/config:** the simulator environment (`Dockerfile`),
+   workflow commands (`Makefile`), experiment settings (`configs/`), and data contracts
+   (`framework/models.py`).
+2. **Change one variable at a time:** each experiment is a short YAML file that points
+   to reusable model, prompt, and feedback files, or `extends:` another experiment and
+   replaces only the key being tested.
+3. **Clear separation between ground truth and generated outputs:** reference answers
+   live in `designs/.../golden/` (read-only), while every run writes to a new
+   timestamped folder in `runs/` that is never overwritten.
 
-## Folders
+## Repo layout
 
 ```
+Dockerfile              environment: Python 3.12 + iverilog + verilator
+Makefile                named commands: image, shell, check, show-config, run, eval, report
+requirements.txt        pyyaml
+
 configs/
-  experiments/   one file per experiment; this is what you run
-  models/        which LLM to use and its settings
-  feedback/      one file per feedback mechanism (compile, self-check, coverage)
-prompts/         prompt text, with {placeholders} filled in at run time
-designs/         designs in the standard layout (see below)
+  experiments/          one file per experiment (input to `make run`)
+  models/               OpenRouter model id, temperature, max_tokens
+  feedback/             in-loop checks (compile, simulate, self_check, coverage, spec_check)
+
+prompts/                plain .md files with {placeholders}
+
+designs/                ground-truth inputs (read-only during runs)
+  <group>/<name>/
+    design.yaml         name, top_module, original_name
+    spec.md             natural-language specification (given to the agent)
+    golden/             answer key (held back for evaluation)
+      rtl/              reference Verilog (known-good DUT)
+      tb/               (optional) reference testbench
+      mutants/          (optional) buggy RTL files for mutation kill-rate scoring
+
 framework/
-  config.py      reads experiment configs
+  models.py             dataclasses for all configs, designs, LLM calls, and run records
+  config.py             loads YAML into ExperimentConfig
+
 scripts/
-  show_config.py prints an experiment's final config and any problems
-  standardize.py imports designs into the standard layout and checks them
+  standardize.py        imports designs into the standard layout and checks them
+  show_config.py        prints the resolved ExperimentConfig and checks paths
+
+runs/                   (gitignored) one folder per run, never overwritten
+  <experiment>/<timestamp>_<git_sha>/
+    config.yaml         snapshot of ExperimentConfig
+    provenance.json     Provenance (git commit, dirty flag, docker image, iverilog version)
+    summary.json
+    <design>__seed<n>/
+      run.json          DesignRun (all iterations, LLM calls, and feedback CheckResults)
+      eval.json         EvalResult (scored against designs/.../golden/)
+      generated_tb/
+        iter_0.sv
+        iter_1.sv
+        final.sv
 ```
 
-## Experiment configs
+## Contracts (`framework/models.py`)
 
-An experiment file lists everything the run uses. Most values are paths to
-other files, so a model or feedback mechanism is written once and reused by
-many experiments.
+Every YAML/JSON file on disk and every boundary between modules matches a
+standard-library `@dataclass` in `framework/models.py`:
 
-```yaml
-name: baseline
-designs: designs/examples
-model: configs/models/gpt4o.yaml
-prompts:
-  generate: prompts/generate_testbench.md
-  find_root_cause: prompts/find_root_cause.md
-  fix: prompts/fix_testbench.md
-feedback:
-  - configs/feedback/compile.yaml
-  - configs/feedback/self_check.yaml
-max_iterations: 5
-seeds: [0, 1, 2]
-```
+- **`ModelConfig`** (`configs/models/*.yaml`): `name`, `model_id` (OpenRouter id), `temperature`, `max_tokens`.
+- **`FeedbackConfig`** (`configs/feedback/*.yaml`): `name`, `tool`, `args`, `options`.
+- **`ExperimentConfig`** (`configs/experiments/*.yaml`): `name`, `designs`, `model`, `prompts`, `feedback`, `max_iterations`, `seeds`.
+- **`Design`** (`designs/<group>/<name>/`): `name`, `top_module`, `original_name`, `spec_path`, `golden_rtl`, `golden_tb`, `golden_mutants`.
+- **`LLMCall`**: exact prompt, raw response, token counts, cost (USD), and wall time.
+- **`CheckResult`**: result of one feedback check (`name`, `passed`, `summary`, `details`).
+- **`Iteration`** & **`DesignRun`** (`run.json`): every iteration's testbench, LLM calls, check results, and total cost/time.
+- **`EvalResult`** (`eval.json`): post-run grading against `golden/` (`compiles`, `golden_rtl_passed`, `mutants_killed`, `mutation_score`, `killed_list`, `survived_list`).
+- **`Provenance`** (`provenance.json`): `timestamp`, `git_commit`, `git_dirty`, `docker_image`, `iverilog_version`.
 
-To make a variant, start from another experiment with `extends:` and write
-only the keys that change. **A key in the child replaces the same key in the
-parent**; that is the only rule.
+## In-loop feedback vs. post-run evaluation
 
-```yaml
-extends: configs/experiments/baseline.yaml
-name: no_self_check
-feedback:
-  - configs/feedback/compile.yaml
-```
-
-This makes it easy to change one thing at a time, which the papers in our
-report often did not do.
-
-## Design layout
-
-```
-designs/<group>/<name>/
-  design.yaml   name, top_module, original_name
-  spec.md       natural-language specification
-  rtl/          the design's Verilog files
-  tb/           (optional) reference testbench
-```
-
-`scripts/standardize.py check` confirms every design follows this layout: the
-folder name is clean (lowercase, underscores), `spec.md` exists and isn't empty,
-`rtl/` has Verilog files, and `top_module` is actually defined in them.
-
-`scripts/standardize.py import-verilogeval <folder> <group>` copies VerilogEval
-files (`Prob042_vector2_prompt.txt`, `_ref.sv`, `_test.sv`) into this layout
-and records the original name in `design.yaml`.
-
-## Not built yet
-
-- The runner that calls the model, runs the feedback tools, and saves results.
-- Importers for datasets other than VerilogEval.
+- **In-loop feedback (`configs/feedback/`):** checks the agent can run while generating
+  and fixing its testbench (`compile`, `simulate`, `self_check`, `coverage`, `spec_check`).
+  These never use `golden/tb/` or `golden/mutants/` to tell the agent which outputs are wrong.
+- **Post-run evaluation (`EvalResult`):** after the agent finishes, `final.sv` is graded
+  against `golden/rtl/` (Eval0 compile, Eval1 false-positive check) and `golden/mutants/`
+  (Eval2 mutation kill rate).
