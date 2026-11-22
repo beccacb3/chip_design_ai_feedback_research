@@ -1,0 +1,6 @@
+extends: configs/prompts/base.yaml
+name: compile_errors
+role: tool
+system: null          # feedback messages carry no system prompt
+template: prompts/feedback/compile_errors.md
+required_vars: [tool, stderr]

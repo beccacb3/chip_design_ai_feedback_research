@@ -1,4 +1,5 @@
+kind: feedback
 name: mutation
-kind: mutation
+type: mutation
 mutants_from: design        # use designs/<suite>/<id>/mutants/
-template: prompts/feedback/surviving_mutants.md
+template: configs/prompts/feedback/surviving_mutants.yaml

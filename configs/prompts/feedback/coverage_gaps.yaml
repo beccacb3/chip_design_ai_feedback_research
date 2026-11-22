@@ -1,0 +1,6 @@
+extends: configs/prompts/base.yaml
+name: coverage_gaps
+role: tool
+system: null          # feedback messages carry no system prompt
+template: prompts/feedback/coverage_gaps.md
+required_vars: [summary, uncovered]

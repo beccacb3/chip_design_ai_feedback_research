@@ -1,0 +1,6 @@
+extends: configs/prompts/base.yaml
+name: self_check_report
+role: tool
+system: null          # feedback messages carry no system prompt
+template: prompts/feedback/self_check_report.md
+required_vars: [fail_threshold, ensemble_size, flagged_scenarios]

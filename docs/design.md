@@ -21,16 +21,15 @@ reference, which makes ablations and "gradient of variable" sweeps cheap.
 ```
 configs/
   experiments/   # top-level entry points; the only thing you pass to the runner
+  prompts/       # prompt configs (template + vars + role/system), inheritable
   agents/        # agent architecture (control loop, stages, context, tools)
   models/        # inference engine (provider, model id, sampling params)
   feedback/      # one file per feedback mechanism (compile, sim, coverage, mutation...)
   evals/         # metrics to compute after a run
   suites/        # which designs to run on (list / filters over designs/)
   importers/     # rules for turning a raw external dataset into designs/
-prompts/
-  generation/    # prompt templates, plain Markdown with {placeholders}
-  correction/
-  feedback/      # templates that format tool output back into the context
+prompts/         # raw template text only (Markdown with {placeholders});
+                 # always used through a configs/prompts/ config
 designs/
   <suite>/<design_id>/
     design.yaml  # metadata (see below)
@@ -44,29 +43,90 @@ runs/            # (gitignored) outputs: runs/<experiment>/<timestamp>/...
 scripts/
   standardize.py # import / check / index content
 src/specfidelity/
-  config.py      # config loader (extends, refs, overrides, sweeps, validation)
+  config.py      # config loader (composition, inheritance, overrides, sweeps, validation)
   __main__.py    # CLI: resolve / plan  (runner comes later)
 ```
 
-## Config model
+## Config model: composition + inheritance
 
-Configs are YAML. Three mechanisms keep them reusable:
+Every piece of the flow is a **component config** with a `kind`:
+`prompt`, `agent`, `model`, `feedback`, `eval`, or `suite`. An experiment
+composes components, and components compose other components (an agent's
+stages reference prompt configs; a feedback mechanism references the prompt
+config used to report its result). Define something once, reuse it everywhere.
 
-| Mechanism | Syntax | Purpose |
-| --- | --- | --- |
-| **Reference** | any string value ending in `.yaml`/`.yml` | Inlines that file. Lets an experiment point at an agent, model, suite, etc. |
-| **Extends** | `extends: path/to/base.yaml` | Deep-merges this file over a base. Dicts merge; lists and scalars replace. Use for ablations. |
-| **Sweep** | `sweep: {dotted.key: [v1, v2, ...]}` | Cartesian expansion into multiple run variants. |
+Wherever a config is expected, you can write it three ways:
 
-Plus CLI overrides (`-o budget.max_iterations=10`) and `${dotted.key}`
-interpolation inside strings (e.g. `output_dir: runs/${name}`).
+```yaml
+# 1. Reuse as-is: a path to an already defined config
+prompt: configs/prompts/generation/tb_from_spec.yaml
 
-All paths are **relative to the repo root**, not to the file that contains
-them. That makes a path mean the same thing wherever it appears.
+# 2. Reuse + tweak: inherit from it and override some fields, inline
+prompt:
+  extends: configs/prompts/generation/tb_from_spec.yaml
+  vars: { language: SystemVerilog }
 
-Resolution order: load + `extends` → CLI overrides → sweep expansion →
-reference inlining → interpolation → validation (required keys and file
-existence).
+# 3. Inline from scratch (rarely needed)
+prompt: { kind: prompt, name: adhoc, template: prompts/generation/x.md }
+```
+
+A file can also `extends:` another file at the top level to make a named,
+reusable variant (e.g. `tb_from_spec_python_checker.yaml` extends
+`tb_from_spec.yaml` and changes one var).
+
+### Merge rules
+
+- Mappings merge recursively; lists and scalars replace.
+- `null` deletes a key. This is how ablations remove things:
+  `feedback: { functional_self_check: null }`.
+- If the base value is still a reference (`prompt: x.yaml`) and the override is
+  a mapping without `extends`, the override is applied **on top of** `x.yaml`
+  rather than replacing it. So in an experiment you can reach into the agent's
+  prompt without restating anything:
+
+  ```yaml
+  extends: configs/experiments/correctbench_gpt4o.yaml
+  agent:
+    stages:
+      generate:
+        prompt:
+          vars: { language: SystemVerilog }
+  ```
+- Things meant to be tweaked individually are **mappings keyed by name**, not
+  lists: agent `stages` (keyed by stage id, in execution order) and experiment
+  `feedback` (keyed by mechanism name). That is what lets inheritance change
+  one stage or drop one mechanism.
+- `abstract: true` marks a config that only exists to be inherited from (e.g.
+  `configs/prompts/base.yaml`); it is not inherited by children.
+
+CLI overrides (`-o agent.stages.generate.prompt.vars.language=VHDL`) and
+`sweep:` keys use the same dotted paths and pass straight through references
+(`agent` being a path does not stop you from overriding something inside it).
+`${dotted.key}` interpolation works inside strings (e.g. `output_dir: runs/${name}`).
+
+All paths are **relative to the repo root**, not to the file containing them.
+
+Resolution order: load + top-level `extends` → CLI overrides → sweep expansion →
+reference/`extends` inlining (recursive) → interpolation → validation. Every
+inlined config gets a `_source` field recording where it came from (and whether
+it was locally overridden), so the resolved snapshot is self-describing.
+
+### Prompt
+
+```yaml
+# configs/prompts/generation/tb_from_spec.yaml
+extends: configs/prompts/base.yaml          # role: user, system prompt, ...
+name: tb_from_spec
+template: prompts/generation/testbench_from_spec.md
+vars:                                       # defaults baked into this prompt
+  language: Verilog
+  checker_style: inline Verilog comparisons against expected values
+required_vars: [top_module, spec, interface] # supplied at run time
+```
+
+Validation checks every `{placeholder}` in the template is either in `vars` or
+`required_vars` (catches typos), and warns about required vars the template
+never uses.
 
 ### Experiment (entry point)
 
@@ -75,14 +135,24 @@ name: correctbench_gpt4o
 suite:  configs/suites/examples.yaml
 agent:  configs/agents/correctbench.yaml
 model:  configs/models/gpt4o.yaml
-feedback:                      # ordered; agent stages refer to these by name
-  - configs/feedback/compile.yaml
-  - configs/feedback/functional_self_check.yaml
+feedback:                       # name -> config; null disables
+  compile: configs/feedback/compile.yaml
+  functional_self_check: configs/feedback/functional_self_check.yaml
 eval:   configs/evals/default.yaml
 budget: { max_iterations: 5, max_reboots: 2, max_tokens: 200000, max_wall_s: 900 }
 seeds:  [0, 1, 2]
 output_dir: runs/${name}
 ```
+
+Examples in `configs/experiments/`:
+
+| File | Shows |
+| --- | --- |
+| `correctbench_gpt4o.yaml` | baseline |
+| `ablation_no_self_check.yaml` | inherit + remove a feedback mechanism with `null` |
+| `ablation_python_checker.yaml` | inherit + swap one stage's prompt for another defined prompt |
+| `ablation_prompt_language.yaml` | inherit + override one var of the existing prompt, inline |
+| `sweep_models_iterations.yaml` | sweep over models x budgets x prompt configs (12 variants) |
 
 ### Agent
 
@@ -90,32 +160,39 @@ Structured around the five components from Section 3.1 of the report so that
 architectures can be compared component by component:
 
 ```yaml
+kind: agent
 name: correctbench
 control_loop: { type: generate_validate_correct }
 stages:
-  - { id: generate, prompt: prompts/generation/testbench_from_spec.md }
-  - { id: validate, feedback: [compile, functional_self_check] }
-  - { id: correct,  prompts: [prompts/correction/root_cause.md, prompts/correction/apply_fix.md] }
-context: { strategy: full_history }   # or prune_last_k, summarize, ...
+  generate: { prompt: configs/prompts/generation/tb_from_spec.yaml }
+  validate: { feedback: all }          # whatever the experiment enables
+  correct:
+    prompts:
+      - configs/prompts/correction/root_cause.yaml
+      - configs/prompts/correction/apply_fix.yaml
+context: { strategy: full_history }    # or prune_last_k, summarize, ...
 tools: [simulator]
 ```
 
-The model (inference engine) is deliberately **not** part of the agent, so the
-same architecture can be run across backends.
+`configs/agents/autobench.yaml` is just `extends: correctbench.yaml` plus a
+different generation prompt. The model (inference engine) is deliberately
+**not** part of the agent, so the same architecture runs across backends.
 
 ### Feedback mechanism
 
-One file per mechanism. `kind` selects the implementation; `template` decides
-how the result is written back into the context.
+One file per mechanism. `type` selects the implementation; `template` is a
+prompt config deciding how the result is written back into the context.
+Variants inherit (`compile_verilator.yaml` extends `compile.yaml`, swaps the tool).
 
 ```yaml
+kind: feedback
 name: compile
-kind: compile
+type: compile
 tool: { name: iverilog, args: ["-g2012"] }
-template: prompts/feedback/compile_errors.md
+template: configs/prompts/feedback/compile_errors.yaml
 ```
 
-Planned kinds: `compile`, `simulate`, `functional_self_check` (CorrectBench-style
+Planned types: `compile`, `simulate`, `functional_self_check` (CorrectBench-style
 RTL-ensemble validation), `coverage` (line/branch/toggle/functional),
 `mutation` (kill rate), `spec_trace` (GoGoTB-style spec-grounded bins).
 
@@ -150,17 +227,19 @@ There are three subcommands. Each one is a dry run unless you pass `--apply`.
   under `source` and `aliases`. Raw files are copied, never moved.
 - **`check`** validates every `design.yaml`: the id matches the directory, the
   referenced files exist, `top_module` matches the RTL, ids are unique after
-  normalization across suites, and the spec isn't empty. It also resolves every
-  experiment config so broken references show up early. It exits non-zero on
-  errors, so it can run in CI or a pre-commit hook.
+  normalization across suites, and the spec isn't empty. It then validates
+  every component config under `configs/` on its own (`kind`, required keys,
+  template placeholders vs. vars) and resolves every experiment and sweep
+  variant, so broken references show up early. Identical problems are reported
+  once with a count rather than once per experiment that inherits them. It
+  exits non-zero on errors, so it can run in CI or a pre-commit hook.
 - **`index`** regenerates `designs/manifest.yaml`.
 
 ## Open questions / decisions for us
 
-1. **Custom loader vs Hydra/OmegaConf.** Hydra already does composition,
-   sweeps, and overrides, but it's heavy and opinionated (cwd changes, the
-   `defaults` list). The custom loader is about 150 lines on top of PyYAML. My
-   recommendation is to start custom and switch if it grows.
+1. ~~Custom loader vs Hydra/OmegaConf.~~ **Decided: custom loader** built
+   around composition and inheritance: any component can be referenced by
+   path, extended, and tweaked inline (see "Config model").
 2. **Should paths be relative to the repo root or to the file?** I chose the
    repo root. It's simpler to read, but configs can't be moved without
    rewriting their paths.

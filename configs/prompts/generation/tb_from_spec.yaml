@@ -1,0 +1,7 @@
+extends: configs/prompts/base.yaml
+name: tb_from_spec
+template: prompts/generation/testbench_from_spec.md
+vars:
+  language: Verilog
+  checker_style: inline Verilog comparisons against expected values
+required_vars: [top_module, spec, interface]

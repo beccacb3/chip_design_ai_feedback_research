@@ -1,4 +1,4 @@
-# Sweep: model backend x iteration budget (2 x 3 = 6 variants).
+# Sweep: model backend x iteration budget x generation prompt (2 x 3 x 2 = 12).
 extends: configs/experiments/correctbench_gpt4o.yaml
 name: sweep_models_iterations
 sweep:
@@ -6,3 +6,6 @@ sweep:
     - configs/models/gpt4o.yaml
     - configs/models/claude_sonnet.yaml
   budget.max_iterations: [1, 3, 5]
+  agent.stages.generate.prompt:
+    - configs/prompts/generation/tb_from_spec.yaml
+    - configs/prompts/generation/tb_from_spec_python_checker.yaml

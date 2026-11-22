@@ -1,5 +1,6 @@
+kind: feedback
 name: coverage
-kind: coverage
+type: coverage
 tool: { name: verilator, args: ["--coverage"] }
 metrics: [line, branch, toggle]
-template: prompts/feedback/coverage_gaps.md
+template: configs/prompts/feedback/coverage_gaps.yaml

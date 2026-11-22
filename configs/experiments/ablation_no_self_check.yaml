@@ -1,6 +1,5 @@
-# Ablation: same as baseline, but drop the functional self-check feedback.
-# Only one variable changes, so any delta is attributable to it.
+# Ablation: baseline minus the functional self-check. One variable changes.
 extends: configs/experiments/correctbench_gpt4o.yaml
 name: ablation_no_self_check
 feedback:
-  - configs/feedback/compile.yaml
+  functional_self_check: null

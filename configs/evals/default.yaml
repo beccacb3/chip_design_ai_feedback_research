@@ -1,3 +1,4 @@
+kind: eval
 name: default
 metrics:
   - syntax_pass          # AutoEval Eval0

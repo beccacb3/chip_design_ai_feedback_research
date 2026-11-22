@@ -23,7 +23,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from specfidelity.config import ConfigError, load_experiment  # noqa: E402
+from specfidelity.config import ConfigError, load_component, load_experiment  # noqa: E402
 
 DESIGNS = ROOT / "designs"
 CIRCUIT_TYPES = {"combinational", "sequential"}
@@ -228,19 +228,36 @@ def cmd_check(args) -> int:
             n_warn += 1
 
     if not args.no_configs:
+        # (level, message) -> [where...], so one broken prompt is reported once,
+        # not once per experiment and sweep variant that uses it
+        found: dict[tuple[str, str], list[str]] = defaultdict(list)
+
+        def collect(where: str, rep) -> None:
+            for e in rep.errors:
+                found[("error", e)].append(where)
+            for w in rep.warnings:
+                found[("warning", w)].append(where)
+
+        component_dirs = ("prompts", "agents", "models", "feedback", "evals", "suites")
+        for sub in component_dirs:
+            for f in sorted((ROOT / "configs" / sub).rglob("*.y*ml")):
+                try:
+                    collect(rel(f), load_component(rel(f), ROOT)[1])
+                except ConfigError as e:
+                    found[("error", str(e))].append(rel(f))
         for exp in sorted((ROOT / "configs/experiments").glob("*.y*ml")):
             try:
                 for cfg, rep in load_experiment(rel(exp), root=ROOT):
-                    tag = f"{rel(exp)}" + (f" [{cfg['variant']}]" if cfg.get("variant") else "")
-                    for e in rep.errors:
-                        print(f"error   {tag}: {e}")
-                    for w in rep.warnings:
-                        print(f"warning {tag}: {w}")
-                    n_err += len(rep.errors)
-                    n_warn += len(rep.warnings)
+                    collect(rel(exp) + (f" [{cfg['variant']}]" if cfg.get("variant") else ""), rep)
             except ConfigError as e:
-                print(f"error   {rel(exp)}: {e}")
-                n_err += 1
+                found[("error", str(e))].append(rel(exp))
+
+        for (level, msg), where in sorted(found.items()):
+            exps = sorted({w.split(" [")[0] for w in where})
+            more = f" (+{len(exps) - 1} more)" if len(exps) > 1 else ""
+            print(f"{level:<7} {exps[0]}{more}: {msg}")
+            n_err += level == "error"
+            n_warn += level == "warning"
 
     n_designs = sum(len(v) for v in seen.values())
     print(f"\n{n_designs} design(s), {n_err} error(s), {n_warn} warning(s)")

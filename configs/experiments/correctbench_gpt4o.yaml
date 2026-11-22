@@ -4,9 +4,9 @@ description: CorrectBench-style self-correcting testbench generation (baseline).
 suite: configs/suites/examples.yaml
 agent: configs/agents/correctbench.yaml
 model: configs/models/gpt4o.yaml
-feedback:
-  - configs/feedback/compile.yaml
-  - configs/feedback/functional_self_check.yaml
+feedback:                       # name -> config; set a name to null to disable it
+  compile: configs/feedback/compile.yaml
+  functional_self_check: configs/feedback/functional_self_check.yaml
 eval: configs/evals/default.yaml
 budget:
   max_iterations: 5

@@ -1,15 +1,16 @@
+kind: agent
 name: correctbench
 control_loop:
   type: generate_validate_correct
-stages:
-  - id: generate
-    prompt: prompts/generation/testbench_from_spec.md
-  - id: validate
-    feedback: all        # use whatever the experiment enables (keeps ablations one-line)
-  - id: correct
+stages:                         # mapping keyed by id; order is execution order
+  generate:
+    prompt: configs/prompts/generation/tb_from_spec.yaml
+  validate:
+    feedback: all               # whatever the experiment enables
+  correct:
     prompts:
-      - prompts/correction/root_cause.md
-      - prompts/correction/apply_fix.md
+      - configs/prompts/correction/root_cause.yaml
+      - configs/prompts/correction/apply_fix.yaml
 context:
   strategy: full_history
 tools: [simulator]

@@ -1,4 +1,5 @@
+kind: feedback
 name: compile
-kind: compile
+type: compile
 tool: { name: iverilog, args: ["-g2012"] }
-template: prompts/feedback/compile_errors.md
+template: configs/prompts/feedback/compile_errors.yaml
