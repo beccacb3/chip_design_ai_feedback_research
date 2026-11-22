@@ -9,6 +9,7 @@ Tests:
     5. Bad-reset mutant detection
     6. Ignored-enable mutant detection
     7. FIXME dffr_async RTL validation
+    8. FIXME alu_select RTL validation
 """
 
 from pathlib import Path
@@ -215,6 +216,40 @@ def test_fixme_dffr_async(folder):
     )
 
 
+def test_fixme_alu_select(folder):
+    print("\n========== TEST 8: FIXME ALU_SELECT ==========")
+
+    base = Path("designs/fixme/alu_select/golden")
+    rtl = base / "rtl/alu_select.v"
+    tb = base / "tb/alu_select_tb.sv"
+
+    binary = folder / "alu_select.out"
+
+    compiled, diagnostics = compile_verilog(
+        [rtl, tb],
+        binary,
+        args=["-s", "alu_select_tb"],
+    )
+
+    print("Compilation:", compiled)
+
+    if not compiled:
+        print("Diagnostics:", diagnostics.strip())
+        report("FIXME alu_select validation", False)
+        return
+
+    passed, stdout, stderr = run_simulation(binary)
+
+    print("Simulation:", passed)
+    print("Output:", stdout.strip())
+    print("Errors:", stderr.strip())
+
+    report(
+        "FIXME alu_select validation",
+        passed and "ALL ALU_SELECT TESTS PASSED" in stdout,
+    )
+
+
 def main():
     with TemporaryDirectory() as directory:
         folder = Path(directory)
@@ -224,6 +259,7 @@ def main():
         test_simulation_failure(folder)
         test_counter4(folder)
         test_fixme_dffr_async(folder)
+        test_fixme_alu_select(folder)
 
     print("\n" + "=" * 50)
     print("FINAL TEST SUMMARY")
