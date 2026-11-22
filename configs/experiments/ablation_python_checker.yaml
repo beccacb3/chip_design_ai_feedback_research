@@ -1,8 +1,0 @@
-# Ablation: baseline, but tweak one stage's prompt inline -- no new agent file.
-# `agent` still points at correctbench.yaml; only stages.generate.prompt changes.
-extends: configs/experiments/correctbench_gpt4o.yaml
-name: ablation_python_checker
-agent:
-  stages:
-    generate:
-      prompt: configs/prompts/generation/tb_from_spec_python_checker.yaml

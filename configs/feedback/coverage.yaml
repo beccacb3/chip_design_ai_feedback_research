@@ -1,6 +1,4 @@
-kind: feedback
+# Measure which lines/branches of the design the testbench exercises.
 name: coverage
-type: coverage
-tool: { name: verilator, args: ["--coverage"] }
-metrics: [line, branch, toggle]
-template: configs/prompts/feedback/coverage_gaps.yaml
+tool: verilator
+args: ["--coverage"]

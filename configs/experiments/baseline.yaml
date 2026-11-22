@@ -1,0 +1,16 @@
+# Baseline experiment: generate a testbench, check it, and fix it in a loop.
+name: baseline
+designs: designs/examples             # folder of designs to run on
+model: configs/models/gpt4o.yaml
+
+prompts:
+  generate: prompts/generate_testbench.md
+  find_root_cause: prompts/find_root_cause.md
+  fix: prompts/fix_testbench.md
+
+feedback:                             # checks run on each generated testbench
+  - configs/feedback/compile.yaml
+  - configs/feedback/self_check.yaml
+
+max_iterations: 5
+seeds: [0, 1, 2]

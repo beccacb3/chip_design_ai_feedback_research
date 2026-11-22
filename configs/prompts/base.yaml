@@ -1,8 +1,0 @@
-# Root of all prompt configs. Everything here can be overridden by `extends`.
-kind: prompt
-name: base
-abstract: true      # not usable directly; only as a parent
-role: user
-system: prompts/system/verification_engineer.md
-vars: {}            # defaults baked into this prompt (overridable)
-required_vars: []   # must be supplied at run time (spec, testbench, feedback, ...)

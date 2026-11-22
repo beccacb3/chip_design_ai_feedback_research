@@ -1,5 +1,0 @@
-kind: suite
-name: examples
-include:
-  - designs/examples/*
-filters: {}                # e.g. { circuit_type: sequential }

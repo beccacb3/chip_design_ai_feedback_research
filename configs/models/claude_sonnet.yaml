@@ -1,5 +1,3 @@
-kind: model
-name: claude_sonnet
 provider: anthropic
 model_id: claude-3-5-sonnet-20240620
-params: { temperature: 0.2, max_output_tokens: 8192 }
+temperature: 0.2

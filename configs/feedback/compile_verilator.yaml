@@ -1,4 +1,0 @@
-# Same mechanism, different tool: inherit and swap one field.
-extends: configs/feedback/compile.yaml
-name: compile_verilator
-tool: { name: verilator, args: ["--lint-only", "-Wall"] }

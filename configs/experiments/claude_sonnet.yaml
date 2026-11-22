@@ -1,0 +1,5 @@
+# Same as baseline, but with a different model.
+extends: configs/experiments/baseline.yaml
+name: claude_sonnet
+
+model: configs/models/claude_sonnet.yaml

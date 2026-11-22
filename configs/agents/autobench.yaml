@@ -1,6 +1,0 @@
-# Inherits the whole CorrectBench loop; swaps only the generation prompt.
-extends: configs/agents/correctbench.yaml
-name: autobench
-stages:
-  generate:
-    prompt: configs/prompts/generation/tb_from_spec_python_checker.yaml

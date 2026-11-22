@@ -1,4 +1,0 @@
-extends: configs/prompts/base.yaml
-name: root_cause
-template: prompts/correction/root_cause.md
-required_vars: [feedback, testbench]

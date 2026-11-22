@@ -1,5 +1,3 @@
-kind: model
-name: gpt4o
 provider: openai
 model_id: gpt-4o-2024-08-06
-params: { temperature: 0.2, max_output_tokens: 8192 }
+temperature: 0.2

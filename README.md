@@ -1,44 +1,23 @@
 # chip_design_ai_feedback_research
 
-A config-driven framework for evaluating how faithfully agent-generated hardware
-testbenches follow their specifications. It accompanies the CSCE689 State-of-the-Art
-Critique Report.
+A small framework for running and comparing experiments on agent-generated
+hardware testbenches. It accompanies the CSCE689 State-of-the-Art Critique Report.
 
-See [`docs/design.md`](docs/design.md) for the proposed design.
+See [`docs/design.md`](docs/design.md) for how it is organized.
 
-## Configs compose and inherit
-
-Every piece (prompt, agent, model, feedback mechanism, eval, suite) is a config
-under `configs/`. Anywhere a config is expected you can pass a path to an
-existing one, or extend it and tweak fields inline:
-
-```yaml
-# configs/experiments/ablation_prompt_language.yaml
-extends: configs/experiments/correctbench_gpt4o.yaml   # inherit the whole experiment
-name: ablation_prompt_language
-agent:
-  stages:
-    generate:
-      prompt:                       # still configs/prompts/generation/tb_from_spec.yaml,
-        vars: { language: SystemVerilog }   # with one var changed
-```
-
-## Quick start
+## Usage
 
 ```bash
-pip install -e .                      # or: export PYTHONPATH=src
+pip install -r requirements.txt
 
-# Inspect what an experiment resolves to (what a run would snapshot)
-python -m specfidelity resolve configs/experiments/correctbench_gpt4o.yaml
-python -m specfidelity resolve configs/experiments/correctbench_gpt4o.yaml \
-    -o agent.stages.generate.prompt.vars.language=VHDL
-python -m specfidelity plan    configs/experiments/sweep_models_iterations.yaml
+# Show an experiment's final config (after `extends:`) and any problems
+python scripts/show_config.py configs/experiments/no_self_check.yaml
 
-# Content hygiene
+# Check that every design follows the standard layout
 python scripts/standardize.py check
-python scripts/standardize.py import raw/verilog-eval/dataset_spec-to-rtl \
-    --importer configs/importers/verilogeval.yaml --suite verilogeval_human   # dry run
-python scripts/standardize.py index --apply
+
+# Copy VerilogEval files into the standard layout (add --apply to write)
+python scripts/standardize.py import-verilogeval raw/verilogeval verilogeval
 ```
 
-The runner (agent loop + feedback implementations) is not implemented yet.
+The runner is not built yet.

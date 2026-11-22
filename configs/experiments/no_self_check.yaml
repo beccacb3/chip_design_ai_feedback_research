@@ -1,0 +1,6 @@
+# Same as baseline, but without the self-check feedback.
+extends: configs/experiments/baseline.yaml
+name: no_self_check
+
+feedback:
+  - configs/feedback/compile.yaml

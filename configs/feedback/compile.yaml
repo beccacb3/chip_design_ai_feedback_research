@@ -1,5 +1,4 @@
-kind: feedback
+# Compile the testbench with the design and report any errors.
 name: compile
-type: compile
-tool: { name: iverilog, args: ["-g2012"] }
-template: configs/prompts/feedback/compile_errors.yaml
+tool: iverilog
+args: ["-g2012"]

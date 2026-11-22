@@ -1,7 +1,0 @@
-# AutoBench-style hybrid: Verilog driver + Python checker. Only the var changes.
-extends: configs/prompts/generation/tb_from_spec.yaml
-name: tb_from_spec_python_checker
-vars:
-  checker_style: >-
-    a Verilog driver that dumps DUT signals each cycle, plus a separate Python
-    checker that computes expected outputs and compares them

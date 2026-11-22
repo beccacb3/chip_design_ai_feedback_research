@@ -1,6 +1,0 @@
-extends: configs/prompts/base.yaml
-name: surviving_mutants
-role: tool
-system: null          # feedback messages carry no system prompt
-template: prompts/feedback/surviving_mutants.md
-required_vars: [surviving]

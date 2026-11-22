@@ -1,8 +1,0 @@
-# Reuse an existing prompt config but override one var, inline.
-extends: configs/experiments/correctbench_gpt4o.yaml
-name: ablation_prompt_language
-agent:
-  stages:
-    generate:
-      prompt:
-        vars: { language: SystemVerilog }

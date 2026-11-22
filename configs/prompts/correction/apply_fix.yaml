@@ -1,3 +1,0 @@
-extends: configs/prompts/base.yaml
-name: apply_fix
-template: prompts/correction/apply_fix.md

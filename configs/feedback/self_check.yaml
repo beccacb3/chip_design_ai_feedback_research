@@ -1,0 +1,8 @@
+# CorrectBench-style check: run the testbench against several LLM-written
+# versions of the design. If most of them fail a scenario, the scenario
+# itself is probably wrong.
+name: self_check
+tool: iverilog
+args: ["-g2012"]
+num_designs: 20
+fail_threshold: 0.7
