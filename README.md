@@ -5,7 +5,7 @@ testbenches follow their specifications.
 
 ## Project documents
 - **Master Primary Document (Phase 2_3 Research Ideation Report):**
-  [Google Doc](https://docs.google.com/document/d/182tDbQ4avzvv4YrXwWZo6pMbEXXyFV5k2xtE9jVL4-M/edit?tab=t.rgzel2f66fj)
+  [Google Doc](https://docs.google.com/document/d/1e-iE2tZ_PjXUmcsaox_FkN8hZUYj909ze8gNukg219E/edit?tab=t.0#heading=h.zbjs7zyhjnha)
 - **Phase 2_2 State-of-the-Art Critique Report:**
   [Google Doc](https://docs.google.com/document/d/1cQSQqJEJlWYoiBCev0xtpvcPGk5M4IZyx0uO-MyA7vk/edit?tab=t.6xadbu25koxn#heading=h.qom2o355zw38)
 - **Framework Design & Contracts:**
