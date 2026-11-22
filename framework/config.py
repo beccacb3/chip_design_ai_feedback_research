@@ -6,10 +6,13 @@ An experiment is a YAML file in configs/experiments/. It can:
   2. Use `extends:` to start from another experiment. Any key written in the
      child file replaces that key from the parent.
 
-All paths are relative to the repo root.
+Usage (validate and print resolved config):
+    python3 -m framework.config configs/experiments/baseline.yaml
 """
 
+from dataclasses import asdict
 from pathlib import Path
+import sys
 
 import yaml
 
@@ -68,3 +71,24 @@ def load_experiment(path) -> ExperimentConfig:
         max_iterations=raw["max_iterations"],
         seeds=raw["seeds"],
     )
+
+
+def main():
+    if len(sys.argv) != 2:
+        print(__doc__)
+        return 2
+
+    raw = load_raw_experiment(sys.argv[1])
+    problems = find_problems(raw)
+    if problems:
+        for problem in problems:
+            print(f"problem: {problem}")
+        return 1
+
+    config = load_experiment(sys.argv[1])
+    print(yaml.safe_dump(asdict(config), sort_keys=False))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

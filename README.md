@@ -4,7 +4,7 @@ A config-driven framework for evaluating how faithfully agent-generated hardware
 testbenches follow their specifications. Accompanies the CSCE689 State-of-the-Art
 Critique Report.
 
-See [`docs/design.md`](docs/design.md) for the architecture and data contracts
+See [`docs/design.md`](docs/design.md) for the repo layout and data contracts
 ([`framework/models.py`](framework/models.py)).
 
 ## Quick start
@@ -19,7 +19,7 @@ make check
 make show-config CONFIG=configs/experiments/no_self_check.yaml
 
 # Preview importing VerilogEval files into designs/verilogeval/<name>/golden/...
-python3 scripts/standardize.py import-verilogeval raw/verilogeval verilogeval
+python3 designs/standardize.py import-verilogeval raw/verilogeval verilogeval
 
 # Build the Docker environment (Python + iverilog + verilator)
 make image

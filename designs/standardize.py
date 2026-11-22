@@ -11,8 +11,8 @@ Every design lives in its own folder:
             mutants/        (optional) buggy RTL files for mutation testing
 
 Usage:
-    python scripts/standardize.py check
-    python scripts/standardize.py import-verilogeval <source_folder> <group> [--apply]
+    python3 designs/standardize.py check
+    python3 designs/standardize.py import-verilogeval <source_folder> <group> [--apply]
 
 `import-verilogeval` only prints what it would do unless you add --apply.
 """

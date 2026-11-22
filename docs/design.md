@@ -8,9 +8,10 @@ The framework has three goals:
 2. **Change one variable at a time:** each experiment is a short YAML file that points
    to reusable model, prompt, and feedback files, or `extends:` another experiment and
    replaces only the key being tested.
-3. **Clear separation between ground truth and generated outputs:** reference answers
-   live in `designs/.../golden/` (read-only), while every run writes to a new
-   timestamped folder in `runs/` that is never overwritten.
+3. **Clear separation between generation and evaluation:** `framework/` runs the agent
+   generation loop and writes to a new timestamped folder in `runs/`; `evaluation/`
+   grades the finished testbenches against the read-only answer key in
+   `designs/.../golden/`.
 
 ## Repo layout
 
@@ -27,6 +28,7 @@ configs/
 prompts/                plain .md files with {placeholders}
 
 designs/                ground-truth inputs (read-only during runs)
+  standardize.py        imports designs into the standard layout and checks them
   <group>/<name>/
     design.yaml         name, top_module, original_name
     spec.md             natural-language specification (given to the agent)
@@ -35,13 +37,18 @@ designs/                ground-truth inputs (read-only during runs)
       tb/               (optional) reference testbench
       mutants/          (optional) buggy RTL files for mutation kill-rate scoring
 
-framework/
-  models.py             dataclasses for all configs, designs, LLM calls, and run records
-  config.py             loads YAML into ExperimentConfig
+framework/              agent testbench generation flow
+  models.py             dataclasses (contracts shared across framework and evaluation)
+  config.py             loads YAML into ExperimentConfig (`python3 -m framework.config`)
+  control_loop.py       1. orchestrates generate -> test -> feedback -> fix (`make run`)
+  llm.py                2. OpenRouter API call logic -> LLMCall
+  simulation.py         3. iverilog / vvp / verilator wrapper
+  testing.py            4. runs configured in-loop checks -> list[CheckResult]
+  feedback.py           5. formats failed CheckResults into prompt text
 
-scripts/
-  standardize.py        imports designs into the standard layout and checks them
-  show_config.py        prints the resolved ExperimentConfig and checks paths
+evaluation/             post-run grading against designs/.../golden/
+  evaluate_run.py       grades final.sv -> eval.json + summary.json (`make eval`)
+  report.py             aggregates summary.json across runs/ into a table (`make report`)
 
 runs/                   (gitignored) one folder per run, never overwritten
   <experiment>/<timestamp>_<git_sha>/
@@ -71,12 +78,3 @@ standard-library `@dataclass` in `framework/models.py`:
 - **`Iteration`** & **`DesignRun`** (`run.json`): every iteration's testbench, LLM calls, check results, and total cost/time.
 - **`EvalResult`** (`eval.json`): post-run grading against `golden/` (`compiles`, `golden_rtl_passed`, `mutants_killed`, `mutation_score`, `killed_list`, `survived_list`).
 - **`Provenance`** (`provenance.json`): `timestamp`, `git_commit`, `git_dirty`, `docker_image`, `iverilog_version`.
-
-## In-loop feedback vs. post-run evaluation
-
-- **In-loop feedback (`configs/feedback/`):** checks the agent can run while generating
-  and fixing its testbench (`compile`, `simulate`, `self_check`, `coverage`, `spec_check`).
-  These never use `golden/tb/` or `golden/mutants/` to tell the agent which outputs are wrong.
-- **Post-run evaluation (`EvalResult`):** after the agent finishes, `final.sv` is graded
-  against `golden/rtl/` (Eval0 compile, Eval1 false-positive check) and `golden/mutants/`
-  (Eval2 mutation kill rate).
