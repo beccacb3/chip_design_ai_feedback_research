@@ -1,0 +1,9 @@
+name: default
+metrics:
+  - syntax_pass          # AutoEval Eval0
+  - golden_pass          # AutoEval Eval1 (false-positive guard)
+  - mutant_agreement     # AutoEval Eval2
+  - mutation_kill_rate
+  - code_coverage
+  - cost_tokens          # always on
+  - wall_time_s          # always on

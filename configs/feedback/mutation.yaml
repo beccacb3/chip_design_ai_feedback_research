@@ -1,0 +1,4 @@
+name: mutation
+kind: mutation
+mutants_from: design        # use designs/<suite>/<id>/mutants/
+template: prompts/feedback/surviving_mutants.md

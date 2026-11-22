@@ -1,0 +1,15 @@
+name: correctbench
+control_loop:
+  type: generate_validate_correct
+stages:
+  - id: generate
+    prompt: prompts/generation/testbench_from_spec.md
+  - id: validate
+    feedback: all        # use whatever the experiment enables (keeps ablations one-line)
+  - id: correct
+    prompts:
+      - prompts/correction/root_cause.md
+      - prompts/correction/apply_fix.md
+context:
+  strategy: full_history
+tools: [simulator]

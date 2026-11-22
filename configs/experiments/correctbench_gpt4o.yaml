@@ -1,0 +1,17 @@
+# Baseline: CorrectBench-style generate/validate/correct loop on GPT-4o.
+name: correctbench_gpt4o
+description: CorrectBench-style self-correcting testbench generation (baseline).
+suite: configs/suites/examples.yaml
+agent: configs/agents/correctbench.yaml
+model: configs/models/gpt4o.yaml
+feedback:
+  - configs/feedback/compile.yaml
+  - configs/feedback/functional_self_check.yaml
+eval: configs/evals/default.yaml
+budget:
+  max_iterations: 5
+  max_reboots: 2
+  max_tokens: 200000
+  max_wall_s: 900
+seeds: [0, 1, 2]
+output_dir: runs/${name}

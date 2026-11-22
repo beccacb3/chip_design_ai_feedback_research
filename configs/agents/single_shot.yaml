@@ -1,0 +1,10 @@
+# Direct one-step generation; the "no agent" baseline used by AutoBench.
+name: single_shot
+control_loop:
+  type: single_pass
+stages:
+  - id: generate
+    prompt: prompts/generation/testbench_from_spec.md
+context:
+  strategy: none
+tools: []

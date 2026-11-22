@@ -1,0 +1,8 @@
+# CorrectBench-style: simulate the TB against an ensemble of LLM-generated RTL
+# and flag scenarios that most implementations fail.
+name: functional_self_check
+kind: functional_self_check
+tool: { name: iverilog, args: ["-g2012"] }
+ensemble_size: 20
+fail_threshold: 0.7
+template: prompts/feedback/self_check_report.md

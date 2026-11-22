@@ -1,0 +1,4 @@
+name: compile
+kind: compile
+tool: { name: iverilog, args: ["-g2012"] }
+template: prompts/feedback/compile_errors.md

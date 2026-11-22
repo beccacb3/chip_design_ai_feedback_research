@@ -1,0 +1,5 @@
+name: coverage
+kind: coverage
+tool: { name: verilator, args: ["--coverage"] }
+metrics: [line, branch, toggle]
+template: prompts/feedback/coverage_gaps.md

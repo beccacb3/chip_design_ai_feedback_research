@@ -1,0 +1,8 @@
+# Sweep: model backend x iteration budget (2 x 3 = 6 variants).
+extends: configs/experiments/correctbench_gpt4o.yaml
+name: sweep_models_iterations
+sweep:
+  model:
+    - configs/models/gpt4o.yaml
+    - configs/models/claude_sonnet.yaml
+  budget.max_iterations: [1, 3, 5]
