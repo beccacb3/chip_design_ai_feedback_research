@@ -1,0 +1,42 @@
+generated_by: llm
+model: openai/gpt-4o-2024-08-06
+timestamp: '2026-11-22T18:00:00+00:00'
+requirements:
+- id: REQ_OUTPUT_ENABLES
+  description: Forward ALU output enable controls (ctl_alu_oe, shift_oe, op2_oe, res_oe,
+    op1_oe, bs_oe).
+  rtl_lines:
+  - 72
+  - 73
+  - 74
+  - 75
+  - 76
+  - 77
+  coverpoints:
+    oe_all_low: ctl_alu_oe === 1'b0 && alu_oe === 1'b0 && alu_bs_oe === 1'b0
+    oe_all_high: ctl_alu_oe === 1'b1 && alu_oe === 1'b1 && alu_bs_oe === 1'b1
+- id: REQ_OPERAND_SELECTS
+  description: Forward operand 1 and operand 2 source/modifier select signals directly
+    to outputs.
+  rtl_lines:
+  - 78
+  - 79
+  - 80
+  - 81
+  - 82
+  - 83
+  - 84
+  - 85
+  coverpoints:
+    op1_bus_sel: ctl_alu_op1_sel_bus === 1'b1 && alu_op1_sel_bus === 1'b1
+    op2_neg_high: ctl_alu_sel_op2_neg === 1'b1 && alu_sel_op2_neg === 1'b1
+- id: REQ_CORE_FLAGS
+  description: Forward ALU core control flags (ctl_alu_core_R, V, S) to alu_core_R,
+    V, S.
+  rtl_lines:
+  - 86
+  - 87
+  - 88
+  coverpoints:
+    core_flags_high: ctl_alu_core_R === 1'b1 && alu_core_R === 1'b1 && alu_core_S
+      === ctl_alu_core_S

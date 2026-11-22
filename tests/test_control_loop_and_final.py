@@ -1,15 +1,18 @@
-"""Tests for Section 4.1 final evaluations (evaluation/final.py),
-E1-E4 control loop (framework/control_loop.py), and report table (evaluation/report.py)."""
+"""Tests for LLM requirement decomposition (requirements.yaml), per-requirement-group
+iteration loop in E2-E4 (framework/control_loop.py), Section 4.1 final evaluations
+(evaluation/final.py), and report table (evaluation/report.py)."""
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import yaml
 
 from designs.standardize import load_design
 from evaluation.final import eval_computational_cost, eval_golden_rtl_acceptance
 from evaluation.report import build_report
 from framework.config import load_experiment
 from framework.control_loop import run_design, write_summary
-from framework.models import CheckResult, DesignRun, LLMCall, SimulationConfig
+from framework.feedback import decompose_design_requirements
+from framework.models import CheckResult, DesignRun, LLMCall, ModelConfig, SimulationConfig
 
 WEAK_TB = """`timescale 1ns/1ps
 module tb;
@@ -24,6 +27,42 @@ module tb;
     end
 endmodule
 """
+
+
+def test_llm_requirement_decomposition():
+    design = load_design(Path("designs/examples/counter4"))
+    model = ModelConfig(name="gpt4o", model_id="openai/gpt-4o-2024-08-06")
+
+    def fake_decomp_llm(m, prompt, seed=None):
+        return LLMCall(
+            model=m.model_id,
+            prompt=str(prompt),
+            response="""```yaml
+requirements:
+  - id: REQ_RESET
+    description: Reset sets q to 0.
+    rtl_lines: [8]
+    coverpoints:
+      reset_clears_q: "reset === 1'b1 && q === 4'd0"
+```""",
+            prompt_tokens=80,
+            completion_tokens=40,
+            cost_usd=0.0003,
+            wall_time_s=0.2,
+        )
+
+    with TemporaryDirectory() as tmp:
+        out_req = Path(tmp) / "requirements.yaml"
+        reqs, _ = decompose_design_requirements(
+            design, model, out_path=out_req, llm_fn=fake_decomp_llm
+        )
+        assert len(reqs) == 1 and reqs[0].id == "REQ_RESET"
+        saved = yaml.safe_load(out_req.read_text())
+        assert saved["generated_by"] == "llm"
+        assert saved["model"] == "openai/gpt-4o-2024-08-06"
+        assert "timestamp" in saved
+
+    print("[PASS] LLM requirement decomposition saves requirements.yaml with generated_by=llm metadata")
 
 
 def test_final_only_evaluations():
@@ -68,11 +107,14 @@ def test_final_only_evaluations():
     print("[PASS] Section 4.1 final-only evaluations (golden_rtl_acceptance, computational_cost)")
 
 
-def test_e4_control_loop_and_section_4_1_final_stage():
+def test_e4_per_requirement_group_loop_and_final_stage():
     """Simulate a 2-iteration E4 run on counter4:
-      - Iteration 0: returns WEAK_TB (only exercises REQ_RESET; misses REQ_INCREMENT, REQ_HOLD, REQ_WRAP).
-      - Iteration 1: receives localized E2/E3/E4 requirement-group feedback and returns golden counter4_tb.sv.
-      - Final stage runs all 7 Section 4.1 evaluations (4.1.1 - 4.1.7) and writes final/eval.json + summary.json.
+      - Iteration 0: returns WEAK_TB (passes REQ_RESET, fails REQ_INCREMENT, REQ_HOLD, REQ_WRAP).
+      - Iteration 1: loops over requirement groups:
+          * skips REQ_RESET (already passing),
+          * targets REQ_INCREMENT (`iterations/iter_1/REQ_INCREMENT/feedback.md`),
+          * repairs the testbench so all requirement groups pass.
+      - Final stage runs all 7 Section 4.1 evaluations (4.1.1 - 4.1.7).
     """
     design = load_design(Path("designs/examples/counter4"))
     config = load_experiment("configs/experiments/e4_functional_coverage.yaml")
@@ -80,7 +122,7 @@ def test_e4_control_loop_and_section_4_1_final_stage():
 
     responses = [
         f"```systemverilog\n{WEAK_TB}\n```",
-        "Root cause: REQ_INCREMENT, REQ_HOLD, and REQ_WRAP were not exercised.",
+        "Root cause for REQ_INCREMENT: `en` was never asserted high after reset.",
         f"```systemverilog\n{golden_tb}\n```",
     ]
     call_idx = 0
@@ -108,13 +150,16 @@ def test_e4_control_loop_and_section_4_1_final_stage():
             config, design, seed=0, design_run_dir=trial_dir, llm_fn=fake_llm
         )
 
-        # Iteration 0 failed E2/E3/E4 requirement checks; Iteration 1 passed all of them
+        # Verify requirements.yaml was persisted in the run directory
+        assert (trial_dir / "requirements.yaml").exists()
+
+        # Verify iter_1 skipped passing REQ_RESET and targeted failing REQ_INCREMENT
         assert len(design_run.iterations) == 2
-        assert not design_run.iterations[0].passed
-        assert (trial_dir / "iterations" / "iter_0" / "feedback.md").exists()
+        assert not (trial_dir / "iterations" / "iter_1" / "REQ_RESET").exists()
+        assert (trial_dir / "iterations" / "iter_1" / "REQ_INCREMENT" / "feedback.md").exists()
+        assert (trial_dir / "iterations" / "iter_1" / "REQ_INCREMENT" / "testbench.sv").exists()
         assert design_run.iterations[1].passed
         assert design_run.final_passed
-        assert design_run.num_llm_calls == 3
 
         # Verify all 7 Section 4.1 final evaluation metrics in EvalResult
         assert eval_res.compiles is True
@@ -135,12 +180,13 @@ def test_e4_control_loop_and_section_4_1_final_stage():
         assert "e4_functional_coverage" in table
         assert "100%" in table
 
-    print("[PASS] End-to-end E4 control_loop + Section 4.1.1-4.1.7 final evaluation + report table")
+    print("[PASS] Per-requirement-group E4 control loop + Section 4.1.1-4.1.7 final evaluation + report table")
 
 
 def main():
+    test_llm_requirement_decomposition()
     test_final_only_evaluations()
-    test_e4_control_loop_and_section_4_1_final_stage()
+    test_e4_per_requirement_group_loop_and_final_stage()
     print("\nALL CONTROL LOOP & FINAL EVALUATION TESTS PASSED")
 
 

@@ -1,0 +1,34 @@
+generated_by: llm
+model: openai/gpt-4o-2024-08-06
+timestamp: '2026-11-22T18:00:00+00:00'
+requirements:
+- id: REQ_ASYNC_ASSERT
+  description: Active-low reset (rstz=0 in normal mode) asynchronously clears regrstz[0]
+    and drives srstz=0.
+  rtl_lines:
+  - 11
+  - 14
+  - 20
+  - 21
+  coverpoints:
+    async_reset_low: iscanmode === 1'b0 && rstz === 1'b0 && srstz === 1'b0
+- id: REQ_SYNC_RELEASE
+  description: After rstz releases high, regrstz shifts 1s on posedge clk and releases
+    srstz=1 after RSYNCDEPTH+1 edges.
+  rtl_lines:
+  - 16
+  - 18
+  - 20
+  coverpoints:
+    shift_stage_partial: iscanmode === 1'b0 && rstz === 1'b1 && regrstz[0] === 1'b1
+      && srstz === 1'b0
+    sync_reset_released: iscanmode === 1'b0 && rstz === 1'b1 && srstz === 1'b1
+- id: REQ_SCAN_BYPASS
+  description: When iscanmode=1, wscanrstz and srstz directly follow iscanrstz, bypassing
+    synchronization.
+  rtl_lines:
+  - 11
+  - 21
+  coverpoints:
+    scan_bypass_low: iscanmode === 1'b1 && iscanrstz === 1'b0 && srstz === 1'b0
+    scan_bypass_high: iscanmode === 1'b1 && iscanrstz === 1'b1 && srstz === 1'b1

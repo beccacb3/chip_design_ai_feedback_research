@@ -24,7 +24,10 @@ from framework.config import REPO_ROOT, load_experiment
 from framework.feedback import (
     build_generate_prompt,
     build_repair_prompts,
+    ensure_requirements,
     format_feedback,
+    format_requirement_feedback,
+    is_requirement_passing,
 )
 from framework.llm import call_llm, extract_code_block
 from framework.models import (
@@ -64,6 +67,36 @@ def collect_provenance(timestamp: str) -> Provenance:
     )
 
 
+def _call_repair(
+    config: ExperimentConfig,
+    current_tb_code: str,
+    feedback_text: str,
+    history: list[dict[str, str]],
+    seed: int,
+    llm_fn: Callable,
+) -> tuple[str, list[LLMCall], list[dict[str, str]]]:
+    """Execute one repair step (optional root_cause call + fix call) and return updated code."""
+    rc_prompt, fix_prompt = build_repair_prompts(
+        current_tb_code, feedback_text, config.feedback
+    )
+    active_msgs = list(history) if config.feedback.history == "full" else []
+    calls: list[LLMCall] = []
+
+    if rc_prompt:
+        active_msgs.append({"role": "user", "content": rc_prompt})
+        rc_call = llm_fn(config.model, list(active_msgs), seed=seed)
+        calls.append(rc_call)
+        active_msgs.append({"role": "assistant", "content": rc_call.response})
+
+    active_msgs.append({"role": "user", "content": fix_prompt})
+    fix_call = llm_fn(config.model, list(active_msgs), seed=seed)
+    calls.append(fix_call)
+    active_msgs.append({"role": "assistant", "content": fix_call.response})
+
+    new_history = active_msgs if config.feedback.history == "full" else history
+    return extract_code_block(fix_call.response), calls, new_history
+
+
 def run_design(
     config: ExperimentConfig,
     design: Design,
@@ -76,6 +109,12 @@ def run_design(
     iters_root = design_run_dir / "iterations"
     iters_root.mkdir(parents=True, exist_ok=True)
 
+    # Always ensure requirements are decomposed and saved (used in E2-E4 loop and in E1-E4 final_eval)
+    decomp_call = ensure_requirements(design, config.model, llm_fn=llm_fn)
+    req_file = (REPO_ROOT / design.spec_path).parent / "requirements.yaml"
+    if req_file.is_file():
+        shutil.copy2(req_file, design_run_dir / "requirements.yaml")
+
     iterations: list[Iteration] = []
     history: list[dict[str, str]] = []
     current_tb_code = ""
@@ -84,6 +123,10 @@ def run_design(
         iter_dir = iters_root / f"iter_{idx}"
         iter_dir.mkdir(parents=True, exist_ok=True)
         llm_calls: list[LLMCall] = []
+        if idx == 0 and decomp_call is not None:
+            llm_calls.append(decomp_call)
+
+        sim_elapsed_total = 0.0
 
         if idx == 0:
             gen_prompt = build_generate_prompt(design, config.feedback)
@@ -92,44 +135,86 @@ def run_design(
             llm_calls.append(call_rec)
             history.append({"role": "assistant", "content": call_rec.response})
             current_tb_code = extract_code_block(call_rec.response)
-        else:
+
+            tb_path = iter_dir / "testbench.sv"
+            tb_path.write_text(current_tb_code)
+
+            sim_start = time.monotonic()
+            checks = run_iteration_checks(
+                design, tb_path, iter_dir, config.simulation, config.testing
+            )
+            sim_elapsed_total += round(time.monotonic() - sim_start, 4)
+
+        elif not config.feedback.decompose_requirements:
+            # E1 (Monolithic): one repair pass for the whole specification per iteration
             prev_iter = iterations[-1]
             prev_dir = iters_root / f"iter_{idx - 1}"
             feedback_text = format_feedback(prev_iter.checks, config.feedback, iter_dir=prev_dir)
-            rc_prompt, fix_prompt = build_repair_prompts(
-                current_tb_code, feedback_text, config.feedback
+            current_tb_code, new_calls, history = _call_repair(
+                config, current_tb_code, feedback_text, history, seed, llm_fn
             )
+            llm_calls.extend(new_calls)
 
-            # Context strategy: keep full conversation or prune to latest iteration only
-            active_msgs = list(history) if config.feedback.history == "full" else []
+            tb_path = iter_dir / "testbench.sv"
+            tb_path.write_text(current_tb_code)
 
-            if rc_prompt:
-                active_msgs.append({"role": "user", "content": rc_prompt})
-                rc_call = llm_fn(config.model, list(active_msgs), seed=seed)
-                llm_calls.append(rc_call)
-                active_msgs.append({"role": "assistant", "content": rc_call.response})
+            sim_start = time.monotonic()
+            checks = run_iteration_checks(
+                design, tb_path, iter_dir, config.simulation, config.testing
+            )
+            sim_elapsed_total += round(time.monotonic() - sim_start, 4)
 
-            active_msgs.append({"role": "user", "content": fix_prompt})
-            fix_call = llm_fn(config.model, list(active_msgs), seed=seed)
-            llm_calls.append(fix_call)
-            active_msgs.append({"role": "assistant", "content": fix_call.response})
+        else:
+            # E2-E4 (Decomposed): loop over each requirement group within the iteration
+            prev_checks = iterations[-1].checks
+            by_name = {c.name: c for c in prev_checks}
+            tb_path = iter_dir / "testbench.sv"
 
-            if config.feedback.history == "full":
-                history = active_msgs
-            current_tb_code = extract_code_block(fix_call.response)
+            # If the previous iteration failed to compile, repair compilation first
+            if "compile" in by_name and not by_name["compile"].passed:
+                comp_fb = format_feedback(
+                    [by_name["compile"]], config.feedback, iter_dir=iter_dir / "compile_fix"
+                )
+                current_tb_code, new_calls, history = _call_repair(
+                    config, current_tb_code, comp_fb, history, seed, llm_fn
+                )
+                llm_calls.extend(new_calls)
+                tb_path.write_text(current_tb_code)
+                sim_start = time.monotonic()
+                prev_checks = run_iteration_checks(
+                    design, tb_path, iter_dir, config.simulation, config.testing
+                )
+                sim_elapsed_total += round(time.monotonic() - sim_start, 4)
 
-        tb_path = iter_dir / "testbench.sv"
-        tb_path.write_text(current_tb_code)
+            # Now iterate over each requirement group in design.requirements
+            checks = prev_checks
+            for req in design.requirements:
+                if is_requirement_passing(checks, req.id):
+                    continue
+
+                req_dir = iter_dir / req.id
+                req_fb = format_requirement_feedback(
+                    checks, req, config.feedback, req_dir=req_dir
+                )
+                current_tb_code, new_calls, history = _call_repair(
+                    config, current_tb_code, req_fb, history, seed, llm_fn
+                )
+                llm_calls.extend(new_calls)
+
+                (req_dir / "testbench.sv").write_text(current_tb_code)
+                tb_path.write_text(current_tb_code)
+
+                sim_start = time.monotonic()
+                checks = run_iteration_checks(
+                    design, tb_path, iter_dir, config.simulation, config.testing
+                )
+                sim_elapsed_total += round(time.monotonic() - sim_start, 4)
+                if all(c.passed for c in checks):
+                    break
+
         (iter_dir / "llm_calls.json").write_text(
             json.dumps([asdict(c) for c in llm_calls], indent=2) + "\n"
         )
-
-        # In-loop stage: compose and run the tests configured in `config.testing`
-        sim_start = time.monotonic()
-        checks = run_iteration_checks(
-            design, tb_path, iter_dir, config.simulation, config.testing
-        )
-        sim_elapsed = round(time.monotonic() - sim_start, 4)
         all_passed = all(c.passed for c in checks)
 
         iterations.append(
@@ -139,7 +224,7 @@ def run_design(
                 llm_calls=llm_calls,
                 checks=checks,
                 passed=all_passed,
-                sim_wall_time_s=sim_elapsed,
+                sim_wall_time_s=round(sim_elapsed_total, 4),
             )
         )
         if all_passed:
