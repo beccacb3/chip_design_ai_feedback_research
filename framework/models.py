@@ -17,7 +17,7 @@ class ModelConfig:
     model_id: str                  # OpenRouter id, e.g. "openai/gpt-4o-2024-08-06"
     temperature: float = 0.0
     max_tokens: int = 8192
-    token_file: str | None = "~/.tokens/becca.json"
+    token_file: str | None = "~/.tokens"
 
 
 @dataclass

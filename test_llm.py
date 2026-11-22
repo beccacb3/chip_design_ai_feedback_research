@@ -18,8 +18,10 @@ def test_token_lookup():
         txt_file = tmp_dir / "token.txt"
         txt_file.write_text("sk-or-test-plain\n")
 
-        # 2. JSON token file (like ~/.tokens/becca.json)
-        json_file = tmp_dir / "token.json"
+        # 2. JSON token file (inside a directory)
+        tokens_dir = tmp_dir / ".tokens"
+        tokens_dir.mkdir()
+        json_file = tokens_dir / "user.json"
         json_file.write_text(json.dumps({"openrouter": {"api_key": "sk-or-test-json"}}))
 
         old_env_key = os.environ.pop("OPENROUTER_API_KEY", None)
@@ -27,6 +29,8 @@ def test_token_lookup():
         try:
             assert get_api_key(str(txt_file)) == "sk-or-test-plain"
             assert get_api_key(str(json_file)) == "sk-or-test-json"
+            assert get_api_key(str(tokens_dir)) == "sk-or-test-json"
+            assert get_api_key(str(tmp_dir)) == "sk-or-test-json"
 
             # Env var takes priority over token_file
             os.environ["OPENROUTER_API_KEY"] = "sk-or-test-env"

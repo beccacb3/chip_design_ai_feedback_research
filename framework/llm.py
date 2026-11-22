@@ -3,8 +3,8 @@
 API key lookup order:
   1. `OPENROUTER_API_KEY` environment variable.
   2. `OPENROUTER_TOKEN_FILE` environment variable, or `model.token_file`
-     (supports either a JSON file like `{"openrouter": {"api_key": "..."}}`
-     or a plain-text file containing the key).
+     (can be a JSON file, a plain-text file, or a directory like `~/.tokens`
+     or `~` to search for any JSON file containing `openrouter.api_key`).
 """
 
 import json
@@ -25,31 +25,58 @@ CODE_BLOCK_RE = re.compile(
 )
 
 
-def get_api_key(token_file: str | None = None) -> str:
-    """Resolve the OpenRouter API key from env var or token file."""
+def _read_key_from_file(path: Path) -> str | None:
+    """Extract an OpenRouter key from a JSON or plain-text file, if present."""
+    try:
+        text = path.read_text().strip()
+    except OSError:
+        return None
+    if not text:
+        return None
+    if path.suffix.lower() == ".json":
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        key = (
+            data.get("openrouter", {}).get("api_key")
+            if isinstance(data.get("openrouter"), dict)
+            else data.get("api_key")
+        )
+        return str(key).strip() if key else None
+    return text
+
+
+def get_api_key(token_file: str | None = "~/.tokens") -> str:
+    """Resolve the OpenRouter API key from env var, file, or directory search."""
     env_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     if env_key:
         return env_key
 
-    file_path = os.environ.get("OPENROUTER_TOKEN_FILE") or token_file
-    if file_path:
-        path = Path(file_path).expanduser()
-        if path.is_file():
-            text = path.read_text().strip()
-            if path.suffix.lower() == ".json":
-                data = json.loads(text)
-                key = (
-                    data.get("openrouter", {}).get("api_key")
-                    if isinstance(data.get("openrouter"), dict)
-                    else data.get("api_key")
-                )
-                if key:
-                    return str(key).strip()
-            elif text:
-                return text
+    target = os.environ.get("OPENROUTER_TOKEN_FILE") or token_file or "~"
+    path = Path(target).expanduser()
+
+    if path.is_file():
+        key = _read_key_from_file(path)
+        if key:
+            return key
+
+    search_dirs = []
+    if path.is_dir():
+        search_dirs.append(path)
+        if (path / ".tokens").is_dir():
+            search_dirs.insert(0, path / ".tokens")
+
+    for directory in search_dirs:
+        for candidate in sorted(directory.glob("*.json")):
+            key = _read_key_from_file(candidate)
+            if key:
+                return key
 
     raise RuntimeError(
-        "OpenRouter API key not found. Set OPENROUTER_API_KEY or configure token_file."
+        "OpenRouter API key not found. Set OPENROUTER_API_KEY or place a token JSON in ~/.tokens/."
     )
 
 
