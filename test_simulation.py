@@ -8,6 +8,7 @@ Tests:
     4. Golden counter4 RTL validation
     5. Bad-reset mutant detection
     6. Ignored-enable mutant detection
+    7. FIXME dffr_async RTL validation
 """
 
 from pathlib import Path
@@ -180,6 +181,40 @@ def test_counter4(folder):
         )
 
 
+def test_fixme_dffr_async(folder):
+    print("\n========== TEST 7: FIXME DFFR_ASYNC ==========")
+
+    base = Path("designs/fixme/dffr_async/golden")
+    rtl = base / "rtl/dffr_async.v"
+    tb = base / "tb/dffr_async_tb.sv"
+
+    binary = folder / "dffr_async.out"
+
+    compiled, diagnostics = compile_verilog(
+        [rtl, tb],
+        binary,
+        args=["-s", "dffr_async_tb"],
+    )
+
+    print("Compilation:", compiled)
+
+    if not compiled:
+        print("Diagnostics:", diagnostics.strip())
+        report("FIXME dffr_async validation", False)
+        return
+
+    passed, stdout, stderr = run_simulation(binary)
+
+    print("Simulation:", passed)
+    print("Output:", stdout.strip())
+    print("Errors:", stderr.strip())
+
+    report(
+        "FIXME dffr_async validation",
+        passed and "ALL DFFR_ASYNC TESTS PASSED" in stdout,
+    )
+
+
 def main():
     with TemporaryDirectory() as directory:
         folder = Path(directory)
@@ -188,6 +223,7 @@ def main():
         test_compilation_failure(folder)
         test_simulation_failure(folder)
         test_counter4(folder)
+        test_fixme_dffr_async(folder)
 
     print("\n" + "=" * 50)
     print("FINAL TEST SUMMARY")
