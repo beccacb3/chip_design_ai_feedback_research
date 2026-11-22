@@ -131,8 +131,9 @@ def run_final_evaluations(
     fcov_res = by_name.get("req_functional_coverage") or by_name.get("functional_coverage")
     fcov_score = float(fcov_res.details.get("functional_coverage_score", 0.0)) if (fcov_res and compiles) else 0.0
 
+    # A testbench that fails on the valid golden RTL (Eval1) cannot validly kill mutants (Eval2)
     mut_res = by_name.get("mutations") or by_name.get("mutation_testing")
-    mut_details = mut_res.details if (mut_res and compiles) else {}
+    mut_details = mut_res.details if (mut_res and golden_rtl_passed) else {}
 
     gtb_res = by_name.get("golden_tb_comparison")
     gtb_details = gtb_res.details if gtb_res else {}
