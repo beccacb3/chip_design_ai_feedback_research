@@ -1,6 +1,7 @@
-# Level 2: check that the testbench compiles and passes on the golden RTL.
+# Level 2: iterative feedback from compilation + simulation against the reference RTL.
 extends: configs/experiments/baseline.yaml
 name: level2_simulate
+max_iterations: 5
 testing:
   - configs/testing/compile.yaml
   - configs/testing/simulate.yaml

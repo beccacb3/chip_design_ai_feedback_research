@@ -1,6 +1,7 @@
-# Level 4: compile + simulate + mutation testing feedback.
+# Level 4: iterative feedback from compilation + simulation + mutation testing.
 extends: configs/experiments/baseline.yaml
 name: level4_mutations
+max_iterations: 5
 testing:
   - configs/testing/compile.yaml
   - configs/testing/simulate.yaml

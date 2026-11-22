@@ -1,14 +1,11 @@
-# Baseline experiment: compile + simulate + mutations checks in the loop.
+# Level 0 (Baseline): 1-shot testbench generation with no feedback loop.
 name: baseline
-max_iterations: 5
+max_iterations: 1
 seeds: [0]
 
 model:      configs/models/gpt4o.yaml
-designs:    configs/designs/examples.yaml
+designs:    configs/designs/fixme.yaml
 simulation: configs/simulation/iverilog.yaml
-testing:
-  - configs/testing/compile.yaml
-  - configs/testing/simulate.yaml
-  - configs/testing/mutations.yaml
+testing:    []
 feedback:   configs/feedback/root_cause_then_fix.yaml
 final_eval: configs/final_eval/standard.yaml

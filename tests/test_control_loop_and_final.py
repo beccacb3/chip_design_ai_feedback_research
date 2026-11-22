@@ -88,7 +88,7 @@ def test_control_loop_and_final_stage():
       - Final stage composes all 8 final_eval metrics and writes final/eval.json + summary.json.
     """
     design = load_design(Path("designs/examples/counter4"))
-    config = load_experiment("configs/experiments/baseline.yaml")
+    config = load_experiment("configs/experiments/level4_mutations.yaml")
     golden_tb = Path("designs/examples/counter4/golden/tb/counter4_tb.sv").read_text()
 
     responses = [
@@ -142,7 +142,7 @@ def test_control_loop_and_final_stage():
 
         write_summary(run_root, config.name, config.model.model_id, [eval_res])
         table = build_report(runs_root)
-        assert "baseline" in table
+        assert "level4_mutations" in table
         assert "100%" in table
 
     print("[PASS] End-to-end control_loop + composed final evaluation + report table")

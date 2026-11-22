@@ -1,4 +1,0 @@
-# Ablation: same as baseline, but swap the model.
-extends: configs/experiments/baseline.yaml
-name: claude_sonnet
-model: configs/models/claude_sonnet.yaml
