@@ -1,0 +1,7 @@
+# Level 3: compile + simulate + RTL coverage feedback.
+extends: configs/experiments/baseline.yaml
+name: level3_coverage
+testing:
+  - configs/testing/compile.yaml
+  - configs/testing/simulate.yaml
+  - configs/testing/coverage.yaml

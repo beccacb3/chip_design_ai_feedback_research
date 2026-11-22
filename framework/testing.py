@@ -1,16 +1,18 @@
-"""Dispatcher: reads ExperimentConfig.testing, calls evaluation.testbench checks,
-and saves iteration check artifacts in iterations/iter_<k>/."""
+"""Dispatcher: reads ExperimentConfig.testing, runs each test in evaluation.testbench,
+and saves iteration check artifacts in iterations/iter_<k>/checks.json."""
 
+from dataclasses import asdict
+import json
 from pathlib import Path
+
 from evaluation import testbench
 from framework.models import CheckResult, Design, SimulationConfig, TestingConfig
 
 CHECKS = {
     "compile": testbench.check_compile,
     "simulate": testbench.check_simulate,
-    "self_check": testbench.check_self_check,
+    "mutations": testbench.check_mutations,
     "coverage": testbench.check_coverage,
-    "spec_check": testbench.check_spec_check,
 }
 
 
@@ -21,10 +23,21 @@ def run_iteration_checks(
     sim: SimulationConfig,
     testing_configs: list[TestingConfig],
 ) -> list[CheckResult]:
-    """Dispatch each configured test in `testing` to evaluation.testbench."""
-    results = []
+    """Run each configured test in `testing_configs` and write iter_dir/checks.json."""
+    iter_dir = Path(iter_dir)
+    iter_dir.mkdir(parents=True, exist_ok=True)
+
+    results: list[CheckResult] = []
     for cfg in testing_configs:
         if cfg.name not in CHECKS:
             raise ValueError(f"unknown testing check: {cfg.name}")
-        results.append(CHECKS[cfg.name](design, tb_path, iter_dir, sim, cfg))
+        result = CHECKS[cfg.name](design, tb_path, iter_dir, sim, cfg)
+        results.append(result)
+        # If compilation failed, skip downstream runtime checks for this iteration.
+        if cfg.name == "compile" and not result.passed:
+            break
+
+    (iter_dir / "checks.json").write_text(
+        json.dumps([asdict(r) for r in results], indent=2) + "\n"
+    )
     return results

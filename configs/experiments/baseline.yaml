@@ -1,13 +1,14 @@
-# Baseline experiment: mixes reusable configs for each stage of the flow.
+# Baseline experiment: compile + simulate + mutations checks in the loop.
 name: baseline
 max_iterations: 5
-seeds: [0, 1, 2]
+seeds: [0]
 
 model:      configs/models/gpt4o.yaml
 designs:    configs/designs/examples.yaml
 simulation: configs/simulation/iverilog.yaml
 testing:
   - configs/testing/compile.yaml
-  - configs/testing/self_check.yaml
+  - configs/testing/simulate.yaml
+  - configs/testing/mutations.yaml
 feedback:   configs/feedback/root_cause_then_fix.yaml
 final_eval: configs/final_eval/standard.yaml

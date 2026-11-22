@@ -1,0 +1,6 @@
+# Level 2: check that the testbench compiles and passes on the golden RTL.
+extends: configs/experiments/baseline.yaml
+name: level2_simulate
+testing:
+  - configs/testing/compile.yaml
+  - configs/testing/simulate.yaml

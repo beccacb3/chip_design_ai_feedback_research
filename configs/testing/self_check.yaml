@@ -1,6 +1,0 @@
-# CorrectBench-style check: run the testbench against N LLM-generated candidate
-# RTL implementations; flag scenarios that >fail_threshold of candidates fail.
-name: self_check
-options:
-  num_designs: 20
-  fail_threshold: 0.7

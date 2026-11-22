@@ -1,0 +1,5 @@
+# Level 1: only check that the testbench compiles.
+extends: configs/experiments/baseline.yaml
+name: level1_compile
+testing:
+  - configs/testing/compile.yaml

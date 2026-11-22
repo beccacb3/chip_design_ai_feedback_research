@@ -1,5 +1,4 @@
-# Spec2Cov-style check: measure code coverage and report uncovered lines/branches.
+# Measure RTL branch/block coverage and report uncovered lines.
 name: coverage
 options:
-  metrics: [line, branch]
   min_coverage: 0.90

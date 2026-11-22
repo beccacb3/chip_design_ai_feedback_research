@@ -19,8 +19,9 @@ check:              ## Check design folders and experiment configs
 show-config:        ## Print the resolved ExperimentConfig for CONFIG
 	python3 -m framework.config $(CONFIG)
 
-test:               ## Run simulation and LLM tests in Docker
+test:               ## Run simulation, testing/feedback, and LLM tests in Docker
 	$(DOCKER) python3 test_simulation.py
+	$(DOCKER) python3 test_testing_and_feedback.py
 	$(DOCKER) python3 test_llm.py
 
 run:                ## Run an experiment into a new folder in runs/

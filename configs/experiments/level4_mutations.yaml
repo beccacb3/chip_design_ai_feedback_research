@@ -1,0 +1,7 @@
+# Level 4: compile + simulate + mutation testing feedback.
+extends: configs/experiments/baseline.yaml
+name: level4_mutations
+testing:
+  - configs/testing/compile.yaml
+  - configs/testing/simulate.yaml
+  - configs/testing/mutations.yaml
