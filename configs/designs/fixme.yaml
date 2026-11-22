@@ -1,0 +1,4 @@
+name: fixme
+paths:
+  - designs/fixme/mux
+  - designs/fixme/syncrstz
