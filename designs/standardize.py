@@ -26,7 +26,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
-from framework.models import Design  # noqa: E402
+from framework.models import Design, RequirementGroup  # noqa: E402
 
 DESIGNS = REPO_ROOT / "designs"
 
@@ -50,6 +50,7 @@ def load_design(folder: Path) -> Design:
     folder = folder.resolve()
     info = yaml.safe_load((folder / "design.yaml").read_text())
     rel = lambda p: str(p.relative_to(REPO_ROOT))
+    reqs = [RequirementGroup(**r) for r in info.get("requirements", [])]
     return Design(
         name=info["name"],
         top_module=info["top_module"],
@@ -58,6 +59,7 @@ def load_design(folder: Path) -> Design:
         golden_rtl=[rel(p) for p in sorted((folder / "golden" / "rtl").glob("*.*v"))],
         golden_tb=[rel(p) for p in sorted((folder / "golden" / "tb").glob("*.*v"))],
         golden_mutants=[rel(p) for p in sorted((folder / "golden" / "mutants").glob("*.*v"))],
+        requirements=reqs,
     )
 
 

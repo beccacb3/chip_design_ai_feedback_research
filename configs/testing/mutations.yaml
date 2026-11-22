@@ -1,4 +1,0 @@
-# Run the testbench against golden/mutants/ and check the mutation kill rate.
-name: mutations
-options:
-  min_kill_rate: 1.0

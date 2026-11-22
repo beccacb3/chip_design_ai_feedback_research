@@ -1,4 +1,4 @@
-# Run the compiled testbench and check that simulation finishes before timeout.
+# E1+: Run the compiled testbench and report simulation pass/fail, assertion failures, and runtime errors.
 name: simulate
 options:
   timeout_s: 10

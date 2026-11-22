@@ -1,5 +1,5 @@
 IMAGE  = spec-fidelity
-CONFIG ?= configs/experiments/baseline.yaml
+CONFIG ?= configs/experiments/e1_monolithic.yaml
 
 # Run a command inside the Docker container with the repo (and ~/.tokens if present) mounted.
 DOCKER = docker run --rm -v $(CURDIR):/work -v $(HOME)/.tokens:/root/.tokens:ro -w /work -e PYTHONPATH=/work -e PYTHONDONTWRITEBYTECODE=1 -e OPENROUTER_API_KEY -e OPENROUTER_TOKEN_FILE $(IMAGE)

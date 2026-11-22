@@ -20,7 +20,7 @@ pip install -r requirements.txt
 make check
 
 # Print the resolved ExperimentConfig (after `extends:` and file references)
-make show-config CONFIG=configs/experiments/level1_compile.yaml
+make show-config CONFIG=configs/experiments/e4_functional_coverage.yaml
 
 # Run the infrastructure test suite (simulation, testing/feedback, and OpenRouter LLM)
 make test

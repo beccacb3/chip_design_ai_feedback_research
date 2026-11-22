@@ -1,6 +1,0 @@
-# Level 2: extends Level 1 (+ simulation against the reference RTL).
-extends: configs/experiments/level1_compile.yaml
-name: level2_simulate
-testing:
-  - configs/testing/compile.yaml
-  - configs/testing/simulate.yaml

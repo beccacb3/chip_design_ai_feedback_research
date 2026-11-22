@@ -1,8 +1,0 @@
-# Level 4: extends Level 3 (+ mutation kill-rate feedback).
-extends: configs/experiments/level3_coverage.yaml
-name: level4_mutations
-testing:
-  - configs/testing/compile.yaml
-  - configs/testing/simulate.yaml
-  - configs/testing/coverage.yaml
-  - configs/testing/mutations.yaml

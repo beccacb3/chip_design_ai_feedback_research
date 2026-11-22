@@ -1,2 +1,2 @@
-# Check that the generated testbench compiles with the DUT.
+# E1+: Check that the generated testbench compiles with the reference RTL.
 name: compile

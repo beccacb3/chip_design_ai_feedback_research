@@ -1,3 +1,22 @@
 name: mux
 top_module: mux
 original_name: FIXME_RTLFix_L1_MultiModal_1_mux
+requirements:
+  - id: REQ_STAGE1_MUX
+    description: Internal 2:1 muxes select mux1_out (d0/d1 by s0) and mux2_out (d2/d3 by s0).
+    rtl_lines: [13, 14]
+    coverpoints:
+      s0_low_path: "s0 === 1'b0 && mux1_out === d0 && mux2_out === d2"
+      s0_high_path: "s0 === 1'b1 && mux1_out === d1 && mux2_out === d3"
+  - id: REQ_SEL_00_01
+    description: When s1=0, output y selects mux1_out (y=d0 when s0=0, y=d1 when s0=1).
+    rtl_lines: [13, 16]
+    coverpoints:
+      sel_00: "s1 === 1'b0 && s0 === 1'b0 && y === d0"
+      sel_01: "s1 === 1'b0 && s0 === 1'b1 && y === d1"
+  - id: REQ_SEL_10_11
+    description: When s1=1, output y selects mux2_out (y=d2 when s0=0, y=d3 when s0=1).
+    rtl_lines: [14, 16]
+    coverpoints:
+      sel_10: "s1 === 1'b1 && s0 === 1'b0 && y === d2"
+      sel_11: "s1 === 1'b1 && s0 === 1'b1 && y === d3"

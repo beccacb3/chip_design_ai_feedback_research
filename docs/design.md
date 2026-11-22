@@ -1,17 +1,44 @@
 # Framework Design
 
-The framework has three goals:
+This repository implements the experimental pipeline from the
+**Phase 2_3 Research Ideation Report**: isolating how increasingly localized,
+requirement-specific feedback (`E1` → `E4`) impacts the specification fidelity of
+agent-generated hardware testbenches.
 
-1. **Everything is captured as code/config:** the simulator environment (`Dockerfile`),
-   workflow commands (`Makefile`), experiment settings (`configs/`), and data contracts
-   (`framework/models.py`).
-2. **Mix-and-match configs with one inheritance rule:** each of the 6 parts of an
-   experiment (`model`, `designs`, `simulation`, `testing`, `feedback`, `final_eval`)
-   is a small YAML file in `configs/`, and any YAML file can use top-level `extends:`
-   to inherit from another file and override specific keys.
-3. **Clear separation between orchestration and evaluation:** `framework/` runs the agent
-   loop and composes checks/evaluations; `evaluation/` holds the simulator runner,
-   single-testbench checks (`testbench.py`), and final-only evaluations (`final.py`).
+## Feedback Experiments (Section 2.3: `E1` → `E4`)
+
+Every experiment uses the same single-agent architecture, model (`configs/models/gpt4o.yaml`),
+benchmark designs (`configs/designs/fixme.yaml`), iteration limit (`max_iterations: 5`),
+and Section 4.1 final evaluation suite (`configs/final_eval/standard.yaml`). Each
+experiment extends the previous one:
+
+| Experiment (`configs/experiments/`) | `extends:` | Spec Format (`feedback`) | In-loop Checks (`testing`) | What Feedback the Agent Receives |
+| --- | --- | --- | --- | --- |
+| **`e1_monolithic.yaml` (Baseline E1)** | — | Monolithic (`e1_monolithic.yaml`) | `[compile, simulate]` | Monolithic spec + compilation results + simulation pass/fail, assertion failures & runtime errors |
+| **`e2_requirement_groups.yaml` (E2)** | `e1_monolithic.yaml` | Decomposed by requirement groups (`e2_requirement_groups.yaml`) | `[compile, simulate, requirement_groups]` | All of E1 + localized simulation pass/fail and assertion failures per requirement group |
+| **`e3_req_code_coverage.yaml` (E3)** | `e2_requirement_groups.yaml` | Decomposed by requirement groups | `[compile, simulate, requirement_groups, req_code_coverage]` | All of E2 + RTL code coverage checks per requirement group |
+| **`e4_functional_coverage.yaml` (E4)** | `e3_req_code_coverage.yaml` | Decomposed by requirement groups | `[compile, simulate, requirement_groups, req_code_coverage, req_functional_coverage]` | All of E3 + specification-derived functional coverpoint checks per requirement group |
+
+## Final Evaluation Stage (Section 4.1: `4.1.1` – `4.1.7`)
+
+Separate from the in-loop feedback, every finished testbench (`final/testbench.sv`)
+is evaluated on the 7 metrics in `configs/final_eval/standard.yaml`:
+
+1. **`golden_tb_comparison` (§4.1.1 FixMe Golden Testbenches):** compares code
+   coverage, missed scenarios, and functional coverage against `golden/tb/`, plus
+   valid scenarios covered by the generated testbench that `golden/tb/` missed.
+2. **`mutation_testing` (§4.1.2 Mutation Testing):** runs `final/testbench.sv`
+   against faulty RTL variants in `golden/mutants/` and computes the mutation kill rate.
+3. **`golden_rtl_acceptance` (§4.1.3 Golden RTL Acceptance):** verifies that
+   `final/testbench.sv` accepts the known-good `golden/rtl/` without false-positive failures.
+4. **`computational_cost` (§4.1.4 Computational Cost):** records LLM token usage,
+   number of refinement iterations, number of LLM API calls, USD cost, and simulation execution time.
+5. **`code_coverage` (§4.1.5 FixMe Testing Utilities / Code Coverage):** measures
+   RTL statement/branch coverage on `golden/rtl/`.
+6. **`requirement_group_coverage` (§4.1.6 Requirement Group Coverage):** identifies
+   which specification requirement groups were / were not exercised.
+7. **`functional_coverage` (§4.1.7 Functional Coverage):** evaluates specification-derived
+   coverpoints and cross conditions across all requirement groups.
 
 ## Repo layout
 
@@ -21,25 +48,25 @@ Makefile                named commands: image, shell, check, show-config, test, 
 requirements.txt        pyyaml
 
 configs/
-  experiments/          experiment levels (baseline, level1_compile .. level4_mutations)
+  experiments/          e1_monolithic, e2_requirement_groups, e3_req_code_coverage, e4_functional_coverage
   models/               base.yaml + OpenRouter model configs (gpt4o, claude_sonnet)
-  designs/              which design folders to include in a run (examples, fixme)
-  simulation/           simulator tool (iverilog), args, timeout
-  testing/              in-loop checks (compile, simulate, coverage, mutations)
-  feedback/             repair prompt paths, history strategy (full vs last_only)
-  final_eval/           metrics composed in the final stage (testbench + final-only evals)
+  designs/              design sets (examples, fixme)
+  simulation/           iverilog simulator settings
+  testing/              in-loop checks (compile, simulate, requirement_groups, req_code_coverage, req_functional_coverage)
+  feedback/             e1_monolithic (monolithic spec) and e2_requirement_groups (decomposed spec)
+  final_eval/           standard.yaml (Section 4.1.1 - 4.1.7 metrics)
 
-prompts/                plain .md files with {placeholders}
+prompts/                generate_testbench.md, find_root_cause.md, fix_testbench.md
 
 designs/                ground-truth inputs (read-only during runs)
   standardize.py        imports designs into the standard layout and checks them
   <group>/<name>/
-    design.yaml         name, top_module, original_name
-    spec.md             natural-language specification (given to the agent)
-    golden/             answer key (held back for evaluation)
-      rtl/              reference Verilog (known-good DUT; 1 or more files)
-      tb/               (optional) reference testbench
-      mutants/          buggy RTL files for mutation kill-rate scoring
+    design.yaml         name, top_module, original_name, requirements (id, description, rtl_lines, coverpoints)
+    spec.md             natural-language specification
+    golden/             held-back answer key
+      rtl/              reference Verilog (known-good DUT)
+      tb/               reference golden testbench
+      mutants/          faulty RTL variants for mutation testing
 
 framework/              agent loop & config-driven orchestration
   models.py             dataclasses (contracts shared across framework and evaluation)
@@ -47,12 +74,12 @@ framework/              agent loop & config-driven orchestration
   control_loop.py       outer loop (iter 0..k) + final evaluation stage (`make run` / `make eval`)
   llm.py                OpenRouter API call logic -> LLMCall
   testing.py            composes `config.testing` (in-loop) and `config.final_eval` (final stage)
-  feedback.py           formats failed CheckResults into feedback.md and builds prompts
+  feedback.py           formats failed CheckResults into feedback.md and builds E1 / E2-E4 prompts
 
 evaluation/             simulation, testbench checks, and final-only evaluations
   simulation.py         runs iverilog and vvp
-  testbench.py          single-TB checks: check_compile, check_simulate, check_coverage, check_mutations
-  final.py              final-only evals: eval_false_positive, eval_turns, eval_cost_and_time, eval_assertion_audit
+  testbench.py          check_compile, check_simulate, check_requirement_groups, check_req_code_coverage, check_req_functional_coverage, check_mutations
+  final.py              eval_golden_tb_comparison, eval_golden_rtl_acceptance, eval_computational_cost
   report.py             aggregates summary.json across runs/ into a Markdown table (`make report`)
 
 tests/                  infrastructure unit & integration test suite (`make test`)
@@ -60,39 +87,4 @@ tests/                  infrastructure unit & integration test suite (`make test
   test_testing_and_feedback.py
   test_control_loop_and_final.py
   test_llm.py
-
-runs/                   (gitignored) one folder per run, never overwritten
-  <experiment>/<timestamp>_<git_sha>/
-    config.yaml         snapshot of ExperimentConfig
-    provenance.json     Provenance (git commit, dirty flag, docker image, iverilog version)
-    summary.json        experiment-wide rollup metrics
-    <design>__seed<n>/
-      run.json          DesignRun (overall tokens, cost, time, and iterations)
-      iterations/
-        iter_0/
-          testbench.sv  TB generated in iter 0
-          llm_calls.json
-          compile.log / sim.log / coverage.json / mutations.json
-          checks.json   list of CheckResult
-          feedback.md   exact feedback text fed into iter 1's prompt
-        iter_1/
-          ...
-      final/            winning (or last) TB + composed final evaluation scorecard
-        testbench.sv
-        eval.json       EvalResult
 ```
-
-## Experiment levels (`configs/experiments/`)
-
-| Experiment file | `max_iterations` | In-loop `testing` checks | What it tests |
-| --- | :---: | --- | --- |
-| `baseline.yaml` | 1 | `[]` (none) | Level 0: 1-shot LLM testbench generation with no feedback |
-| `level1_compile.yaml` | 5 | `[compile]` | Level 1: compiler error feedback only |
-| `level2_simulate.yaml` | 5 | `[compile, simulate]` | Level 2: compilation + simulation pass on reference RTL |
-| `level3_coverage.yaml` | 5 | `[compile, simulate, coverage]` | Level 3: adds RTL statement/branch coverage feedback |
-| `level4_mutations.yaml` | 5 | `[compile, simulate, coverage, mutations]` | Level 4: adds mutation kill-rate feedback |
-
-Every experiment runs the exact same composed `final_eval` stage at the end
-(`compile`, `simulate`, `coverage`, `mutations`, `false_positive`, `turns`,
-`cost_and_time`, `assertion_audit`) so all levels are compared on the same
-scorecard.

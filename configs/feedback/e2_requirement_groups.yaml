@@ -1,0 +1,4 @@
+# E2-E4 feedback: decomposed specification by requirement groups + localized repair prompts.
+extends: configs/feedback/e1_monolithic.yaml
+name: e2_requirement_groups
+decompose_requirements: true

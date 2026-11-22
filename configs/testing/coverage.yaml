@@ -1,4 +1,0 @@
-# Measure RTL branch/block coverage and report uncovered lines.
-name: coverage
-options:
-  min_coverage: 0.90

@@ -1,6 +1,0 @@
-# Level 1: iterative feedback from compilation errors only.
-extends: configs/experiments/baseline.yaml
-name: level1_compile
-max_iterations: 5
-testing:
-  - configs/testing/compile.yaml

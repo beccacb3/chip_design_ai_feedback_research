@@ -1,7 +1,7 @@
-"""Control flow loop: orchestrates the iteration loop and the final evaluation stage.
+"""Control flow loop: orchestrates the E1-E4 iteration loop and the Section 4.1 final evaluation stage.
 
 Entry point for `make run`:
-    python3 -m framework.control_loop configs/experiments/baseline.yaml
+    python3 -m framework.control_loop configs/experiments/e1_monolithic.yaml
 
 Entry point for `make eval` (re-runs only the final evaluation stage on a saved run):
     python3 -m framework.control_loop --eval-only runs/<experiment>/<timestamp>_<git_sha>
@@ -14,6 +14,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 from typing import Callable
 
 import yaml
@@ -124,9 +125,11 @@ def run_design(
         )
 
         # In-loop stage: compose and run the tests configured in `config.testing`
+        sim_start = time.monotonic()
         checks = run_iteration_checks(
             design, tb_path, iter_dir, config.simulation, config.testing
         )
+        sim_elapsed = round(time.monotonic() - sim_start, 4)
         all_passed = all(c.passed for c in checks)
 
         iterations.append(
@@ -136,6 +139,7 @@ def run_design(
                 llm_calls=llm_calls,
                 checks=checks,
                 passed=all_passed,
+                sim_wall_time_s=sim_elapsed,
             )
         )
         if all_passed:
@@ -155,14 +159,16 @@ def run_design(
         final_testbench="final/testbench.sv",
         final_passed=iterations[-1].passed,
         total_tokens=sum(c.prompt_tokens + c.completion_tokens for c in all_calls),
+        num_llm_calls=len(all_calls),
         total_cost_usd=round(sum(c.cost_usd for c in all_calls), 6),
-        total_wall_time_s=round(sum(c.wall_time_s for c in all_calls), 4),
+        llm_wall_time_s=round(sum(c.wall_time_s for c in all_calls), 4),
+        sim_wall_time_s=round(sum(it.sim_wall_time_s for it in iterations), 4),
     )
     (design_run_dir / "run.json").write_text(
         json.dumps(asdict(design_run), indent=2) + "\n"
     )
 
-    # Final stage: compose and run `config.final_eval.metrics` on final/testbench.sv
+    # Final stage: compose and run Section 4.1 evaluations (`config.final_eval.metrics`)
     eval_result = run_final_evaluations(
         design, design_run, design_run_dir, config.simulation, config.final_eval
     )
@@ -177,16 +183,27 @@ def write_summary(run_root: Path, experiment_name: str, model_id: str, evals: li
         "model": model_id,
         "run_folder": str(run_root.relative_to(REPO_ROOT)) if run_root.is_relative_to(REPO_ROOT) else str(run_root),
         "num_trials": len(evals),
+        # 4.1.3 Golden RTL Acceptance
         "compile_pass_rate": round(sum(e.compiles for e in evals) / n, 4),
-        "golden_rtl_pass_rate": round(sum(e.golden_rtl_passed for e in evals) / n, 4),
+        "golden_rtl_acceptance_rate": round(sum(e.golden_rtl_passed for e in evals) / n, 4),
         "false_positive_rate": round(sum(e.false_positive for e in evals) / n, 4),
-        "avg_coverage_score": round(sum(e.coverage_score for e in evals) / n, 4),
+        # 4.1.2 Mutation Testing
         "avg_mutation_score": round(sum(e.mutation_score for e in evals) / n, 4),
-        "assertion_audit_pass_rate": round(sum(e.assertion_audit_passed for e in evals) / n, 4),
+        # 4.1.5 Code Coverage
+        "avg_code_coverage": round(sum(e.code_coverage_score for e in evals) / n, 4),
+        # 4.1.6 Requirement Group Coverage
+        "avg_req_group_coverage": round(sum(e.req_group_coverage_score for e in evals) / n, 4),
+        # 4.1.7 Functional Coverage
+        "avg_functional_coverage": round(sum(e.functional_coverage_score for e in evals) / n, 4),
+        # 4.1.1 FixMe Golden TB Comparison
+        "avg_missed_scenarios_vs_golden": round(sum(len(e.missed_scenarios_vs_golden) for e in evals) / n, 2),
+        # 4.1.4 Computational Cost
         "avg_turns": round(sum(e.turns for e in evals) / n, 2),
+        "total_llm_calls": sum(e.num_llm_calls for e in evals),
         "total_tokens": sum(e.total_tokens for e in evals),
         "total_cost_usd": round(sum(e.total_cost_usd for e in evals), 6),
-        "total_wall_time_s": round(sum(e.total_wall_time_s for e in evals), 2),
+        "total_llm_wall_time_s": round(sum(e.llm_wall_time_s for e in evals), 2),
+        "total_sim_wall_time_s": round(sum(e.sim_wall_time_s for e in evals), 2),
         "per_trial": [asdict(e) for e in evals],
     }
     (run_root / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
@@ -215,8 +232,11 @@ def run_experiment(config_path: str, llm_fn: Callable = call_llm) -> Path:
             _, eval_res = run_design(config, design, seed, trial_dir, llm_fn=llm_fn)
             evals.append(eval_res)
             print(
-                f"  -> compiles={eval_res.compiles}, golden_pass={eval_res.golden_rtl_passed}, "
-                f"mutation_score={eval_res.mutation_score:.0%}, coverage={eval_res.coverage_score:.0%}, "
+                f"  -> golden_accept={eval_res.golden_rtl_passed}, "
+                f"mutation_score={eval_res.mutation_score:.0%}, "
+                f"code_cov={eval_res.code_coverage_score:.0%}, "
+                f"req_cov={eval_res.req_group_coverage_score:.0%}, "
+                f"func_cov={eval_res.functional_coverage_score:.0%}, "
                 f"turns={eval_res.turns}"
             )
 
@@ -247,6 +267,7 @@ def reevaluate_run(run_root: Path) -> dict:
                 llm_calls=[LLMCall(**c) for c in it["llm_calls"]],
                 checks=[CheckResult(**ch) for ch in it["checks"]],
                 passed=it["passed"],
+                sim_wall_time_s=float(it.get("sim_wall_time_s", 0.0)),
             )
             for it in raw_run["iterations"]
         ]
@@ -257,8 +278,10 @@ def reevaluate_run(run_root: Path) -> dict:
             final_testbench=raw_run["final_testbench"],
             final_passed=raw_run["final_passed"],
             total_tokens=raw_run["total_tokens"],
+            num_llm_calls=int(raw_run.get("num_llm_calls", sum(len(it.llm_calls) for it in iters))),
             total_cost_usd=raw_run["total_cost_usd"],
-            total_wall_time_s=raw_run["total_wall_time_s"],
+            llm_wall_time_s=float(raw_run.get("llm_wall_time_s", raw_run.get("total_wall_time_s", 0.0))),
+            sim_wall_time_s=float(raw_run.get("sim_wall_time_s", 0.0)),
         )
         evals.append(
             run_final_evaluations(

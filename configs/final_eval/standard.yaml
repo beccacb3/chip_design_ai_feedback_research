@@ -1,12 +1,10 @@
+# Section 4.1 Measuring Success (consistent across E1-E4):
 name: standard
 metrics:
-  # Testbench outcome checks (reused from evaluation/testbench.py):
-  - compile
-  - simulate
-  - coverage
-  - mutations
-  # Final-only trajectory & audit evaluations (from evaluation/final.py):
-  - false_positive
-  - turns
-  - cost_and_time
-  - assertion_audit
+  - golden_tb_comparison        # 4.1.1 FixMe Golden Testbenches
+  - mutation_testing            # 4.1.2 Mutation Testing (kill rate on faulty RTL variants)
+  - golden_rtl_acceptance       # 4.1.3 Golden RTL Acceptance (no false positives)
+  - computational_cost          # 4.1.4 Computational Cost (tokens, iterations, API calls, sim time)
+  - code_coverage               # 4.1.5 FixMe Testing Utilities / Code Coverage
+  - requirement_group_coverage  # 4.1.6 Requirement Group Coverage
+  - functional_coverage         # 4.1.7 Functional Coverage

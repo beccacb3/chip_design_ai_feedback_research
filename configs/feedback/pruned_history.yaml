@@ -1,4 +1,0 @@
-# Spec2Cov-style context pruning: only keep the latest iteration in context.
-extends: configs/feedback/root_cause_then_fix.yaml
-name: pruned_history
-history: last_only

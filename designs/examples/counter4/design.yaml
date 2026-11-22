@@ -1,3 +1,25 @@
 name: counter4
 top_module: counter4
 original_name: counter4
+requirements:
+  - id: REQ_RESET
+    description: Active-high synchronous reset sets q to 0 on posedge clk.
+    rtl_lines: [8]
+    coverpoints:
+      reset_clears_q: "reset === 1'b1 && q === 4'd0"
+  - id: REQ_INCREMENT
+    description: When reset is low and en is high, q increments by 1 on posedge clk.
+    rtl_lines: [9]
+    coverpoints:
+      increment_active: "reset === 1'b0 && en === 1'b1 && q !== 4'd0"
+  - id: REQ_HOLD
+    description: When reset is low and en is low, q holds its value across clock edges.
+    rtl_lines: [9]
+    coverpoints:
+      hold_when_disabled: "reset === 1'b0 && en === 1'b0 && q !== 4'd0"
+  - id: REQ_WRAP
+    description: Counter wraps around from 15 (4'hf) back to 0 when enabled.
+    rtl_lines: [9]
+    coverpoints:
+      reaches_max_15: "q === 4'd15"
+      wrap_condition: "reset === 1'b0 && en === 1'b1 && q === 4'd15"

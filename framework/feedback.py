@@ -1,8 +1,9 @@
 """Feedback generation: formats failed CheckResults into feedback.md and builds prompts.
 
-Because each check in `evaluation/testbench.py` writes its own self-contained
-`CheckResult.summary`, `format_feedback` works with any combination of tests in
-`ExperimentConfig.testing`.
+In E1 (`decompose_requirements: false`), the agent receives the monolithic
+specification. In E2-E4 (`decompose_requirements: true`), the specification is
+accompanied by the decomposed requirement groups (`[REQ_ID]`) so simulation,
+code coverage, and functional coverage feedback map directly to requirement groups.
 """
 
 from pathlib import Path
@@ -22,7 +23,7 @@ def format_feedback(
     for r in results:
         if not r.passed:
             lines = r.summary.splitlines()[: cfg.max_error_lines]
-            sections.append(f"### {r.name} failed\n" + "\n".join(lines))
+            sections.append(f"### {r.name} feedback\n" + "\n".join(lines))
 
     feedback_text = "\n\n".join(sections)
     if iter_dir is not None:
@@ -31,10 +32,26 @@ def format_feedback(
     return feedback_text
 
 
+def format_requirement_groups(design: Design) -> str:
+    """Format decomposed requirement groups for E2-E4 prompts."""
+    if not design.requirements:
+        return ""
+    lines = [
+        "\n\n## Decomposed Requirement Groups",
+        "Tag each test case and `$fatal` message with its requirement group ID in brackets (e.g. `[REQ_ID]`):",
+    ]
+    for req in design.requirements:
+        cps = ", ".join(req.coverpoints.keys())
+        lines.append(f"- **`[{req.id}]`**: {req.description} (scenarios: {cps})")
+    return "\n".join(lines)
+
+
 def build_generate_prompt(design: Design, cfg: FeedbackConfig) -> str:
-    """Fill `generate_prompt` with `{top_module}` and `{spec}`."""
+    """Fill `generate_prompt` with `{top_module}` and `{spec}` (plus requirement groups in E2-E4)."""
     template = (REPO_ROOT / cfg.generate_prompt).read_text()
     spec_text = (REPO_ROOT / design.spec_path).read_text().strip()
+    if cfg.decompose_requirements:
+        spec_text += format_requirement_groups(design)
     return template.format(top_module=design.top_module, spec=spec_text)
 
 
