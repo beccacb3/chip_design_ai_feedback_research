@@ -1,0 +1,9 @@
+# E4: All of E3 + functional coverage per requirement group.
+extends: configs/experiments/e3_req_code_coverage.yaml
+name: e4_functional_coverage
+testing:
+  - configs/testing/compile.yaml
+  - configs/testing/simulate.yaml
+  - configs/testing/requirement_groups.yaml
+  - configs/testing/req_code_coverage.yaml
+  - configs/testing/req_functional_coverage.yaml

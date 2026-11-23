@@ -1,10 +1,11 @@
-"""Put designs into the standard layout, and check that they follow it.
+"""Put designs into the standard layout, check them, and load Design contracts.
 
 Every design lives in its own folder:
 
     designs/<group>/<name>/
         design.yaml         name, top_module, original_name
         spec.md             the natural-language specification (given to agent)
+        requirements.yaml   LLM-decomposed requirement groups (generated_by: llm)
         golden/             reference answer key (held back for evaluation)
             rtl/            reference Verilog files (known-good DUT)
             tb/             (optional) reference testbench
@@ -12,9 +13,8 @@ Every design lives in its own folder:
 
 Usage:
     python3 designs/standardize.py check
+    python3 designs/standardize.py decompose [<design_folder> ...]
     python3 designs/standardize.py import-verilogeval <source_folder> <group> [--apply]
-
-`import-verilogeval` only prints what it would do unless you add --apply.
 """
 
 import re
@@ -26,12 +26,10 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
-from framework.models import Design  # noqa: E402
+from framework.models import Design, ModelConfig, RequirementGroup  # noqa: E402
 
 DESIGNS = REPO_ROOT / "designs"
 
-# VerilogEval file names look like: Prob042_vector2_prompt.txt
-#   group(1) = design name ("vector2"), group(2) = file role ("prompt")
 VERILOGEVAL_FILE = re.compile(r"^Prob\d+_(.+)_(prompt|ref|test)\.(txt|sv|v)$")
 
 
@@ -45,11 +43,25 @@ def module_names(verilog_file):
     return re.findall(r"^\s*module\s+(\w+)", verilog_file.read_text(), re.MULTILINE)
 
 
+def load_requirements_file(req_file: Path) -> list[RequirementGroup]:
+    """Load RequirementGroups from a requirements.yaml file."""
+    if not req_file.is_file():
+        return []
+    data = yaml.safe_load(req_file.read_text()) or {}
+    return [RequirementGroup(**r) for r in data.get("requirements", [])]
+
+
 def load_design(folder: Path) -> Design:
     """Load a design folder into the Design dataclass."""
     folder = folder.resolve()
     info = yaml.safe_load((folder / "design.yaml").read_text())
     rel = lambda p: str(p.relative_to(REPO_ROOT))
+    req_file = folder / "requirements.yaml"
+    reqs = (
+        load_requirements_file(req_file)
+        if req_file.is_file()
+        else [RequirementGroup(**r) for r in info.get("requirements", [])]
+    )
     return Design(
         name=info["name"],
         top_module=info["top_module"],
@@ -58,6 +70,7 @@ def load_design(folder: Path) -> Design:
         golden_rtl=[rel(p) for p in sorted((folder / "golden" / "rtl").glob("*.*v"))],
         golden_tb=[rel(p) for p in sorted((folder / "golden" / "tb").glob("*.*v"))],
         golden_mutants=[rel(p) for p in sorted((folder / "golden" / "mutants").glob("*.*v"))],
+        requirements=reqs,
     )
 
 
@@ -98,8 +111,16 @@ def check_design(folder):
         if info.get("top_module") not in module_names(mutant):
             problems.append(f"mutant {mutant.name} does not define top_module '{info.get('top_module')}'")
 
+    req_file = folder / "requirements.yaml"
+    if req_file.is_file():
+        req_data = yaml.safe_load(req_file.read_text()) or {}
+        if req_data.get("generated_by") != "llm":
+            problems.append("requirements.yaml missing `generated_by: llm` metadata")
+        if not req_data.get("requirements"):
+            problems.append("requirements.yaml has empty `requirements` list")
+
     if not problems:
-        load_design(folder)  # verify it cleanly populates the Design contract
+        load_design(folder)
 
     return problems
 
@@ -115,11 +136,32 @@ def check():
     return 1 if total else 0
 
 
+# --------------------------------------------------------------------- decompose
+
+
+def decompose_cmd(targets: list[str]) -> int:
+    from framework.config import load_yaml
+    from framework.feedback import decompose_design_requirements
+
+    model = ModelConfig(**load_yaml("configs/models/gpt4o.yaml"))
+    folders = (
+        [Path(t).resolve() for t in targets]
+        if targets
+        else sorted(p for p in DESIGNS.glob("*/*") if p.is_dir())
+    )
+    for folder in folders:
+        design = load_design(folder)
+        out_path = folder / "requirements.yaml"
+        print(f"decomposing {folder.relative_to(REPO_ROOT)} with {model.model_id}...")
+        decompose_design_requirements(design, model, out_path=out_path)
+        print(f"  -> wrote {out_path.relative_to(REPO_ROOT)}")
+    return 0
+
+
 # --------------------------------------------------------------------- import
 
 
 def import_verilogeval(source, group, apply):
-    # Group the source files by design name.
     designs = {}
     for path in sorted(Path(source).iterdir()):
         match = VERILOGEVAL_FILE.match(path.name)
@@ -148,8 +190,6 @@ def import_verilogeval(source, group, apply):
             (target / "golden" / "tb").mkdir(parents=True)
             shutil.copy(files["test"], target / "golden" / "tb" / f"{name}_tb.sv")
 
-        # VerilogEval names its reference module "RefModule"; we record
-        # whatever name is really in the file.
         info = {
             "name": name,
             "top_module": module_names(files["ref"])[0],
@@ -166,6 +206,8 @@ def main():
     args = sys.argv[1:]
     if args == ["check"]:
         return check()
+    if args and args[0] == "decompose":
+        return decompose_cmd(args[1:])
     if len(args) >= 3 and args[0] == "import-verilogeval":
         return import_verilogeval(args[1], args[2], apply="--apply" in args)
     print(__doc__)

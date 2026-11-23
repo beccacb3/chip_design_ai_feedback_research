@@ -1,4 +1,4 @@
-"""Simulation runner: invokes iverilog, vvp, or verilator."""
+"""Simulation runner: compiles and runs Verilog/SystemVerilog with iverilog and vvp."""
 
 import subprocess
 from pathlib import Path
@@ -65,12 +65,3 @@ def run_simulation(
         result.stdout,
         result.stderr,
     )
-
-
-def run_verilator_coverage(
-    sources: list[Path],
-    work_dir: Path,
-    args: list[str] | None = None,
-) -> dict:
-    """Run verilator coverage and return coverage metrics."""
-    raise NotImplementedError

@@ -1,7 +1,8 @@
-# CorrectBench-style two-step repair: ask for root cause first, then rewrite TB.
-name: root_cause_then_fix
+# E1 feedback: monolithic specification document + repair prompts.
+name: e1_monolithic
 generate_prompt: prompts/generate_testbench.md
 root_cause_prompt: prompts/find_root_cause.md
 fix_prompt: prompts/fix_testbench.md
+decompose_requirements: false
 history: full
 max_error_lines: 100

@@ -1,188 +1,156 @@
+"""Final-only evaluation functions (Section 4.1 of the Research Ideation Report).
 
-"""Final evaluation of generated testbenches against golden RTL and mutants."""
+While `evaluation/testbench.py` defines single-testbench checks (`compile`,
+`simulate`, `requirement_groups`, `req_code_coverage`, `req_functional_coverage`,
+`mutations`), this module defines the final-only evaluations that compare against
+the reference golden testbench or summarize the full refinement trajectory:
 
-from designs.standardize import load_design
+  - `eval_golden_tb_comparison` -- §4.1.1 FixMe Golden Testbenches comparison
+  - `eval_golden_rtl_acceptance` -- §4.1.3 Golden RTL Acceptance (no false positives)
+  - `eval_computational_cost`   -- §4.1.4 Computational Cost (tokens, iterations, API calls, sim time)
+"""
 
-import json
-import re
-from dataclasses import asdict
 from pathlib import Path
 
-from evaluation.simulation import compile_verilog, run_simulation
-from framework.models import Design, EvalResult
+from evaluation.testbench import (
+    REPO_ROOT,
+    check_req_code_coverage,
+    check_req_functional_coverage,
+)
+from framework.models import (
+    CheckResult,
+    Design,
+    DesignRun,
+    SimulationConfig,
+    TestingConfig,
+)
 
 
-def _run_testbench(rtl_sources: list[Path], tb_path: Path, out_bin: Path):
-    """Compile and simulate one RTL implementation with a testbench."""
-    compiled, diagnostics = compile_verilog(
-        sources=rtl_sources + [tb_path],
-        out_bin=out_bin,
+def eval_golden_tb_comparison(
+    design: Design,
+    design_run: DesignRun,
+    design_run_dir: Path,
+    sim: SimulationConfig,
+    prior_results: dict[str, CheckResult],
+) -> CheckResult:
+    """§4.1.1: Compare generated TB against FixMe golden TB on code & functional coverage."""
+    gen_cov = prior_results.get("req_code_coverage")
+    gen_fcov = prior_results.get("req_functional_coverage")
+    gen_cov_score = float(gen_cov.details.get("coverage_score", 0.0)) if gen_cov else 0.0
+    gen_hit_cps = set(gen_fcov.details.get("hit_coverpoints", [])) if gen_fcov else set()
+    gen_fcov_score = float(gen_fcov.details.get("functional_coverage_score", 0.0)) if gen_fcov else 0.0
+
+    if not design.golden_tb:
+        return CheckResult(
+            name="golden_tb_comparison",
+            passed=True,
+            summary="No reference golden testbench present for comparison.",
+            details={
+                "golden_code_coverage": 0.0,
+                "generated_code_coverage": gen_cov_score,
+                "golden_functional_coverage": 0.0,
+                "generated_functional_coverage": gen_fcov_score,
+                "missed_scenarios_vs_golden": [],
+                "extra_scenarios_over_golden": sorted(gen_hit_cps),
+            },
+        )
+
+    golden_tb_path = REPO_ROOT / design.golden_tb[0]
+    work_dir = Path(design_run_dir) / "final" / "golden_tb_work"
+    g_cov = check_req_code_coverage(
+        design, golden_tb_path, work_dir, sim, TestingConfig(name="req_code_coverage")
+    )
+    g_fcov = check_req_functional_coverage(
+        design, golden_tb_path, work_dir, sim, TestingConfig(name="req_functional_coverage")
     )
 
-    if not compiled:
-        return False, False, diagnostics
+    g_cov_score = float(g_cov.details.get("coverage_score", 0.0))
+    g_hit_cps = set(g_fcov.details.get("hit_coverpoints", []))
+    g_fcov_score = float(g_fcov.details.get("functional_coverage_score", 0.0))
 
-    passed, stdout, stderr = run_simulation(out_bin)
-    return True, passed, stdout + stderr
+    missed_vs_golden = sorted(g_hit_cps - gen_hit_cps)
+    extra_over_golden = sorted(gen_hit_cps - g_hit_cps)
+    passed = len(missed_vs_golden) == 0
 
-
-def evaluate_design_run(design: Design, design_run_dir: Path) -> EvalResult:
-    """Evaluate final/testbench.sv against golden RTL and mutants."""
-
-    design_run_dir = Path(design_run_dir)
-    final_dir = design_run_dir / "final"
-    final_dir.mkdir(parents=True, exist_ok=True)
-
-    tb_path = final_dir / "testbench.sv"
-
-    if not tb_path.is_file():
-        raise FileNotFoundError(f"Missing final testbench: {tb_path}")
-
-    golden_sources = [Path(p) for p in design.golden_rtl]
-
-    compiled, golden_passed, golden_output = _run_testbench(
-        golden_sources,
-        tb_path,
-        final_dir / "golden.out",
+    summary = (
+        f"vs. Golden TB: code_cov={gen_cov_score:.0%} (golden {g_cov_score:.0%}), "
+        f"func_cov={gen_fcov_score:.0%} (golden {g_fcov_score:.0%}), "
+        f"missed_vs_golden={missed_vs_golden}, extra_over_golden={extra_over_golden}."
+    )
+    return CheckResult(
+        name="golden_tb_comparison",
+        passed=passed,
+        summary=summary,
+        details={
+            "golden_code_coverage": g_cov_score,
+            "generated_code_coverage": gen_cov_score,
+            "golden_functional_coverage": g_fcov_score,
+            "generated_functional_coverage": gen_fcov_score,
+            "missed_scenarios_vs_golden": missed_vs_golden,
+            "extra_scenarios_over_golden": extra_over_golden,
+        },
     )
 
-    killed = []
-    survived = []
-    invalid_mutants = []
 
-    # Mutant evaluation is meaningful only when the golden RTL passes.
-    if compiled and golden_passed:
-        for mutant_path in design.golden_mutants:
-            mutant = Path(mutant_path)
+def eval_golden_rtl_acceptance(
+    design: Design,
+    design_run: DesignRun,
+    design_run_dir: Path,
+    sim: SimulationConfig,
+    prior_results: dict[str, CheckResult],
+) -> CheckResult:
+    """§4.1.3: Verify the generated testbench accepts the valid golden RTL without false alarms."""
+    comp = prior_results.get("compile")
+    sim_res = prior_results.get("simulate")
+    compiled = comp.passed if comp else False
+    sim_passed = sim_res.passed if sim_res else False
 
-            # Replace the golden RTL file defining the same module.
-            # Other golden RTL dependencies remain included.
-            module_pattern = re.compile(
-                rf"\bmodule\s+{re.escape(design.top_module)}\b"
-            )
-
-            remaining_sources = [
-                source for source in golden_sources
-                if not module_pattern.search(source.read_text())
-            ]
-
-            mutant_compiled, mutant_passed, output = _run_testbench(
-                remaining_sources + [mutant],
-                tb_path,
-                final_dir / f"{mutant.stem}.out",
-            )
-
-            if not mutant_compiled:
-                invalid_mutants.append(mutant.name)
-            elif not mutant_passed:
-                killed.append(mutant.name)
-            else:
-                survived.append(mutant.name)
-
-    mutants_total = len(design.golden_mutants)
-
-    mutation_score = (
-        len(killed) / mutants_total
-        if compiled and golden_passed and mutants_total
-        else 0.0
+    accepted = bool(compiled and sim_passed)
+    false_positive = bool(compiled and not sim_passed)
+    summary = (
+        "Accepted golden RTL without false-positive failures."
+        if accepted
+        else (
+            "False positive: compiled testbench rejected the valid golden RTL."
+            if false_positive
+            else "Failed to compile against golden RTL."
+        )
+    )
+    return CheckResult(
+        name="golden_rtl_acceptance",
+        passed=accepted,
+        summary=summary,
+        details={
+            "accepted": accepted,
+            "false_positive": false_positive,
+        },
     )
 
-    seed_match = re.search(r"__seed(\d+)$", design_run_dir.name)
-    seed = int(seed_match.group(1)) if seed_match else 0
 
-    result = EvalResult(
-        design=design.name,
-        seed=seed,
-        compiles=compiled,
-        golden_rtl_passed=compiled and golden_passed,
-        mutants_total=mutants_total,
-        mutants_killed=len(killed),
-        mutation_score=mutation_score,
-        killed_list=killed,
-        survived_list=survived,
+def eval_computational_cost(
+    design: Design,
+    design_run: DesignRun,
+    design_run_dir: Path,
+    sim: SimulationConfig,
+    prior_results: dict[str, CheckResult],
+) -> CheckResult:
+    """§4.1.4: Record LLM tokens, iterations, LLM API calls, cost ($), and simulation execution time."""
+    turns = len(design_run.iterations)
+    summary = (
+        f"Iterations={turns}, LLM calls={design_run.num_llm_calls}, "
+        f"tokens={design_run.total_tokens}, cost=${design_run.total_cost_usd:.6f}, "
+        f"llm_time={design_run.llm_wall_time_s:.2f}s, sim_time={design_run.sim_wall_time_s:.2f}s."
     )
-
-    data = asdict(result)
-    data["golden_output"] = golden_output
-    data["invalid_mutants"] = invalid_mutants
-
-    (final_dir / "eval.json").write_text(
-        json.dumps(data, indent=2)
+    return CheckResult(
+        name="computational_cost",
+        passed=True,
+        summary=summary,
+        details={
+            "turns": turns,
+            "num_llm_calls": design_run.num_llm_calls,
+            "total_tokens": design_run.total_tokens,
+            "total_cost_usd": design_run.total_cost_usd,
+            "llm_wall_time_s": design_run.llm_wall_time_s,
+            "sim_wall_time_s": design_run.sim_wall_time_s,
+        },
     )
-
-    return result
-
-
-
-def evaluate_experiment_run(run_root: Path) -> dict:
-    """Evaluate all design/seed folders and save summary.json."""
-
-    run_root = Path(run_root)
-
-    if not run_root.is_dir():
-        raise FileNotFoundError(f"Run directory not found: {run_root}")
-
-    results = []
-    skipped = []
-
-    for run_dir in sorted(run_root.iterdir()):
-        if not run_dir.is_dir() or "__seed" not in run_dir.name:
-            continue
-
-        tb_path = run_dir / "final" / "testbench.sv"
-
-        if not tb_path.is_file():
-            skipped.append({
-                "run": run_dir.name,
-                "reason": "Missing final/testbench.sv",
-            })
-            continue
-
-        design_name = run_dir.name.rsplit("__seed", 1)[0]
-
-        matches = [
-            p for p in Path("designs").glob("*/*")
-            if p.is_dir() and p.name == design_name
-        ]
-
-        if len(matches) != 1:
-            skipped.append({
-                "run": run_dir.name,
-                "reason": f"Expected one design match, found {len(matches)}",
-            })
-            continue
-
-        design = load_design(matches[0])
-        result = evaluate_design_run(design, run_dir)
-        results.append(asdict(result))
-
-    total = len(results)
-    golden_passed = sum(r["golden_rtl_passed"] for r in results)
-    mutants_total = sum(r["mutants_total"] for r in results)
-    mutants_killed = sum(r["mutants_killed"] for r in results)
-
-    summary = {
-        "runs_evaluated": total,
-        "runs_skipped": len(skipped),
-        "compile_pass_rate": (
-            sum(r["compiles"] for r in results) / total
-            if total else 0.0
-        ),
-        "golden_rtl_pass_rate": (
-            golden_passed / total if total else 0.0
-        ),
-        "mutation_kill_rate": (
-            mutants_killed / mutants_total
-            if mutants_total else 0.0
-        ),
-        "mutants_killed": mutants_killed,
-        "mutants_total": mutants_total,
-        "results": results,
-        "skipped": skipped,
-    }
-
-    (run_root / "summary.json").write_text(
-        json.dumps(summary, indent=2)
-    )
-
-    return summary

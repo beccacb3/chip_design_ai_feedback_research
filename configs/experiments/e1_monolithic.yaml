@@ -1,0 +1,13 @@
+# E1 (Baseline): Monolithic specification feedback + compilation + simulation results.
+name: e1_monolithic
+max_iterations: 5
+seeds: [0]
+
+model:      configs/models/gpt4o.yaml
+designs:    configs/designs/fixme.yaml
+simulation: configs/simulation/iverilog.yaml
+testing:
+  - configs/testing/compile.yaml
+  - configs/testing/simulate.yaml
+feedback:   configs/feedback/e1_monolithic.yaml
+final_eval: configs/final_eval/standard.yaml

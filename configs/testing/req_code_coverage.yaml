@@ -1,0 +1,4 @@
+# E3+: RTL code coverage checks per requirement group to identify requirement-level coverage gaps.
+name: req_code_coverage
+options:
+  min_coverage: 1.0

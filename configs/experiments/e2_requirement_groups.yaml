@@ -1,0 +1,8 @@
+# E2: Localized feedback by requirement groups through a decomposed specification.
+extends: configs/experiments/e1_monolithic.yaml
+name: e2_requirement_groups
+feedback: configs/feedback/e2_requirement_groups.yaml
+testing:
+  - configs/testing/compile.yaml
+  - configs/testing/simulate.yaml
+  - configs/testing/requirement_groups.yaml

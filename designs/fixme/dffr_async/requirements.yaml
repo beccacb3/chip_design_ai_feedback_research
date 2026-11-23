@@ -1,0 +1,25 @@
+generated_by: llm
+model: openai/gpt-4o-2024-08-06
+timestamp: '2026-11-22T18:00:00+00:00'
+requirements:
+- id: REQ_ASYNC_RESET
+  description: Active-high asynchronous reset (rst=1) immediately clears q and so to 0.
+  rtl_lines:
+  - 17
+  - 18
+  coverpoints:
+    async_rst_active: rst === 1'b1 && q === {SIZE{1'b0}} && so === {SIZE{1'b0}}
+- id: REQ_NORMAL_CAPTURE
+  description: On posedge clk when rst=0 and se=0, q captures din and drives so=q.
+  rtl_lines:
+  - 17
+  - 18
+  coverpoints:
+    normal_capture_data: rst === 1'b0 && se === 1'b0 && din !== {SIZE{1'b0}} && q === din
+- id: REQ_SCAN_CAPTURE
+  description: On posedge clk when rst=0 and se=1, q captures scan input si and drives so=q.
+  rtl_lines:
+  - 17
+  - 18
+  coverpoints:
+    scan_capture_data: rst === 1'b0 && se === 1'b1 && q === si && so === q

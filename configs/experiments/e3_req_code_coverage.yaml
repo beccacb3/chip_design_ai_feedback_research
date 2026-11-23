@@ -1,0 +1,8 @@
+# E3: All of E2 + code coverage checks per requirement group.
+extends: configs/experiments/e2_requirement_groups.yaml
+name: e3_req_code_coverage
+testing:
+  - configs/testing/compile.yaml
+  - configs/testing/simulate.yaml
+  - configs/testing/requirement_groups.yaml
+  - configs/testing/req_code_coverage.yaml

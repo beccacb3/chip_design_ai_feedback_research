@@ -1,4 +1,0 @@
-# LLM-as-judge check: verify every requirement in spec.md has a test in the testbench.
-name: spec_check
-options:
-  judge_model: openai/gpt-4o-2024-08-06
